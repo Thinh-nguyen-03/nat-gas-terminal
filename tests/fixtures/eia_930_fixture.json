@@ -1,0 +1,9 @@
+{
+  "response": {
+    "data": [
+      {"period": "2026-03-07T14", "value": 45000, "respondent": "PJM", "fueltype": "NG"},
+      {"period": "2026-03-07T13", "value": 43200, "respondent": "PJM", "fueltype": "NG"},
+      {"period": "2026-03-07T12", "value": 41800, "respondent": "PJM", "fueltype": "NG"}
+    ]
+  }
+}

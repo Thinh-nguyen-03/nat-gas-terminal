@@ -1,0 +1,6 @@
+{
+  "properties": {
+    "forecast": "https://api.weather.gov/gridpoints/OKX/33,37/forecast",
+    "forecastHourly": "https://api.weather.gov/gridpoints/OKX/33,37/forecast/hourly"
+  }
+}

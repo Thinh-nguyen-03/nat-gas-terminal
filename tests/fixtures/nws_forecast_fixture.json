@@ -1,0 +1,30 @@
+{
+  "properties": {
+    "periods": [
+      {
+        "isDaytime": true,
+        "startTime": "2026-03-07T06:00:00-05:00",
+        "endTime":   "2026-03-07T18:00:00-05:00",
+        "temperature": 32,
+        "temperatureUnit": "F",
+        "name": "Today"
+      },
+      {
+        "isDaytime": false,
+        "startTime": "2026-03-07T18:00:00-05:00",
+        "endTime":   "2026-03-08T06:00:00-05:00",
+        "temperature": 22,
+        "temperatureUnit": "F",
+        "name": "Tonight"
+      },
+      {
+        "isDaytime": true,
+        "startTime": "2026-03-08T06:00:00-05:00",
+        "endTime":   "2026-03-08T18:00:00-05:00",
+        "temperature": 38,
+        "temperatureUnit": "F",
+        "name": "Sunday"
+      }
+    ]
+  }
+}
