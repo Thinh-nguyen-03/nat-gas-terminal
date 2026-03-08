@@ -1,0 +1,16 @@
+{
+  "_comment": "Seed list of known LNG carrier MMSIs that regularly call at US export terminals. Used to supplement AISHub vessel type filtering. Add entries as vessels are observed. MMSI format: 9-digit string.",
+  "_sources": [
+    "AIS vessel tracking (observed callsigns at US LNG terminals)",
+    "Vessel Finder / MarineTraffic public data"
+  ],
+  "tankers": [
+    {"mmsi": "215449000", "name": "Gaslog Shanghai",   "flag": "Malta",        "capacity_m3": 155000},
+    {"mmsi": "215450000", "name": "Gaslog Santiago",   "flag": "Malta",        "capacity_m3": 155000},
+    {"mmsi": "235099455", "name": "BW Pavilion Vanda", "flag": "Singapore",    "capacity_m3": 174000},
+    {"mmsi": "235099624", "name": "BW Pavilion Leeara","flag": "Singapore",    "capacity_m3": 174000},
+    {"mmsi": "311000615", "name": "LNG Sakura",         "flag": "Bahamas",     "capacity_m3": 177000},
+    {"mmsi": "477029100", "name": "Flex Rainbow",       "flag": "Hong Kong",   "capacity_m3": 173400},
+    {"mmsi": "538006531", "name": "Triton Glory",       "flag": "Marshall Is.","capacity_m3": 174000}
+  ]
+}
