@@ -38,8 +38,13 @@ func (h *Handler) Notify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// The body is the source_name that just completed (e.g. "eia_storage").
-	// Pass it as the SSE event data so the frontend knows which panel to refresh.
-	source := strings.TrimSpace(string(body))
+	// Strip newlines before embedding in the SSE frame to prevent protocol injection.
+	source := strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' {
+			return -1
+		}
+		return r
+	}, strings.TrimSpace(string(body)))
 	if source == "" {
 		source = "unknown"
 	}
