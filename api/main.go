@@ -19,13 +19,17 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
+
+	"golang.org/x/time/rate"
 
 	appdb "github.com/nat-gas-terminal/api/internal/db"
 	"github.com/nat-gas-terminal/api/internal/handler"
@@ -83,10 +87,12 @@ func main() {
 	mux.HandleFunc("POST /internal/notify", h.Notify)
 
 	srv := &http.Server{
-		Addr:         ":" + port,
-		Handler:      recoverPanic(cors(allowedOrigin, mux)),
+		Addr:    ":" + port,
+		Handler: recoverPanic(cors(allowedOrigin, limitMiddleware(mux))),
+		// 30s write timeout for all handlers. The SSE handler clears its own
+		// per-response deadline via http.NewResponseController so it is unaffected.
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 0, // disabled: SSE stream handler must not time out
+		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
 
@@ -110,6 +116,67 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("shutdown error", "err", err)
 	}
+}
+
+// limitMiddleware applies two rate limits:
+//   - A global limit on POST /internal/notify to prevent SSE spam from a runaway
+//     scheduler: 2 events/s sustained, burst of 10 (covers all 21 collectors firing
+//     simultaneously on startup).
+//   - A per-IP limit on all routes to prevent DB hammering: 1 req/s sustained,
+//     burst of 30 (covers a dashboard loading ~10 panels in parallel). SSE connections
+//     consume one token on connect only.
+//
+// Stale IP entries are evicted every 5 minutes to bound memory growth.
+func limitMiddleware(next http.Handler) http.Handler {
+	notifyLim := rate.NewLimiter(2, 10)
+
+	type clientEntry struct {
+		lim      *rate.Limiter
+		lastSeen time.Time
+	}
+	var (
+		mu      sync.Mutex
+		clients = make(map[string]*clientEntry)
+	)
+	go func() {
+		for range time.Tick(5 * time.Minute) {
+			mu.Lock()
+			for ip, e := range clients {
+				if time.Since(e.lastSeen) > 5*time.Minute {
+					delete(clients, ip)
+				}
+			}
+			mu.Unlock()
+		}
+	}()
+
+	getLimiter := func(ip string) *rate.Limiter {
+		mu.Lock()
+		defer mu.Unlock()
+		e, ok := clients[ip]
+		if !ok {
+			e = &clientEntry{lim: rate.NewLimiter(1, 30)}
+			clients[ip] = e
+		}
+		e.lastSeen = time.Now()
+		return e.lim
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/internal/notify" && !notifyLim.Allow() {
+			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+			return
+		}
+		ip, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			ip = r.RemoteAddr
+		}
+		if !getLimiter(ip).Allow() {
+			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // cors wraps a handler with permissive CORS headers for the configured origin.
