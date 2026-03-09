@@ -26,6 +26,7 @@ from collectors.price             import PriceCollector
 from collectors.rig_count         import RigCountCollector
 from collectors.weather           import WeatherCollector
 from transforms.features_analog       import compute_analog_features
+from transforms.features_fairvalue    import compute_fairvalue_features
 from transforms.features_lng          import compute_lng_features
 from transforms.features_power_demand import compute_power_demand_features
 from transforms.features_cot     import compute_cot_features
@@ -242,6 +243,14 @@ def _build_scheduler() -> BlockingScheduler:
         CronTrigger(minute=35),
         id="feat_analog",
         name="Historical analog finder (cosine similarity on feature snapshots)",
+    )
+
+    # Fair value model: lookup table (OLS after refit_fairvalue.py is run)
+    scheduler.add_job(
+        compute_fairvalue_features,
+        CronTrigger(minute=40),
+        id="feat_fairvalue",
+        name="Fair value price model (lookup table / OLS)",
     )
 
     return scheduler

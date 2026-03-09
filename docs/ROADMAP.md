@@ -6,19 +6,19 @@ Each feature is described with: what it is, why it matters to a nat gas trader, 
 
 ---
 
-## Implementation Status (last updated 2026-03-08)
+## Implementation Status (last updated 2026-03-08, rev 2)
 
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Feature 1 — Pipeline EBB | ⬜ Not started | Highest-effort item; schema table `pipeline_events` already created |
 | Feature 2 — AIS LNG Vessel Tracking | ✅ Implemented | `collectors/lng_vessels.py`, `transforms/features_lng.py`, `GET /api/lng` |
-| Feature 3 — ISO LMP | ✅ Implemented | `collectors/iso_lmp.py`, `transforms/features_power_demand.py`, `GET /api/power`; NYISO/MISO/CAISO live; PJM/ERCOT/ISO-NE stubbed (require registration) |
+| Feature 3 — ISO LMP | ✅ Implemented | `collectors/iso_lmp.py`, `transforms/features_power_demand.py`, `GET /api/power`; NYISO/MISO/CAISO live; PJM/ERCOT/ISO-NE implemented (set `PJM_API_KEY`, `ERCOT_*`, `ISO_NE_*` in .env to activate) |
 | Feature 4 — Weather-to-Demand | ✅ Implemented | `transforms/demand_coefficients.py`, additions to `features_weather.py` |
 | Feature 5 — TTF Spread | ✅ Implemented | TTF added to `collectors/price.py` (FRED); netback + arb spread in `transforms/features_price.py`; exposed in `GET /api/price` |
 | Feature 6 — Historical Analog Finder | ✅ Implemented | `transforms/features_analog.py`; accumulates daily snapshots; reports top-5 once ≥52 snapshots exist |
 | Feature 7 — Catalyst Calendar | ✅ Implemented | `collectors/catalyst_calendar.py`, `GET /api/calendar` |
 | Feature 8 — Storage Consensus Tracker | ✅ Implemented | `transforms/features_storage.py` additions, `consensus_inputs` table; exposed in `GET /api/storage` |
-| Feature 9 — Fair Value Model | 🔶 In progress | Price backfill done; lookup table transform next. See data availability notes in Feature 9 section |
+| Feature 9 — Fair Value Model | 🔶 In progress | Lookup table implemented (`transforms/features_fairvalue.py`); OLS mode activates after `python -m scripts.backfill_history --section hdd` + `python -m scripts.refit_fairvalue` |
 | **Backfill script** | ✅ Implemented | `scripts/backfill_history.py` — EIA storage (5,064 rows) + CFTC COT (7,596 rows) + NG=F OHLCV (20,345 rows) + FRED spot/TTF (8,318 rows); all 2010–2026 |
 | **Schema additions** | ✅ Implemented | `feature_snapshots`, `pipeline_events` tables added to `db/schema.py` |
 | **Go API stubs** | ✅ Implemented | `GET /api/balance`, `/api/lng`, `/api/power`, `/api/calendar`, `/api/analogs` all live |
