@@ -41,7 +41,7 @@ import requests
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from config.settings import DB_PATH, EIA_API_KEY, FRED_API_KEY  # noqa: E402
+from config.settings import DB_PATH, EIA_API_KEY, FRED_API_KEY, NOAA_CDO_TOKEN  # noqa: E402
 
 logger = logging.getLogger("backfill")
 logging.basicConfig(
@@ -338,6 +338,130 @@ def backfill_prices(conn, start: str = "2010-01-01") -> None:
 
 
 # ---------------------------------------------------------------------------
+# NOAA CDO historical HDD backfill
+# ---------------------------------------------------------------------------
+
+# GHCND station IDs matching the 8 cities in collectors/weather.py.
+# Verified against NOAA station listings for the nearest climate-grade station
+# to each city's lat/lon.
+_NOAA_STATIONS: dict[str, str] = {
+    "new_york":     "GHCND:USW00094728",  # NYC Central Park
+    "chicago":      "GHCND:USW00094846",  # Chicago O'Hare
+    "boston":       "GHCND:USW00014739",  # Boston Logan
+    "philadelphia": "GHCND:USW00013739",  # Philadelphia Intl
+    "houston":      "GHCND:USW00012918",  # Houston Hobby
+    "atlanta":      "GHCND:USW00013874",  # Atlanta Hartsfield-Jackson
+    "minneapolis":  "GHCND:USW00014922",  # Minneapolis-St Paul
+    "detroit":      "GHCND:USW00094847",  # Detroit Metro
+}
+
+_NOAA_CDO_URL = "https://www.ncdc.noaa.gov/cdo-web/api/v2/data"
+_HDD_BASE_F   = 65.0
+
+
+def backfill_noaa_hdd(conn, start_year: int = 2010) -> None:
+    """
+    Fetch GHCND daily TMAX/TMIN for each of the 8 gas-demand cities, compute
+    population-weighted HDD, and write a national daily weighted HDD series to
+    facts_time_series (source_name='noaa_hdd_historical').
+
+    Requires NOAA_CDO_TOKEN in .env (free token from ncdc.noaa.gov/cdo-web/token).
+    One request per city per year; well within the 1000 req/day free-tier limit.
+    """
+    import time
+
+    if not NOAA_CDO_TOKEN:
+        logger.error("NOAA_CDO_TOKEN not set — skipping HDD backfill")
+        return
+
+    from collectors.weather import WEATHER_POINTS
+
+    logger.info("=== NOAA HDD backfill (start_year=%d) ===", start_year)
+    now_str  = datetime.now(timezone.utc).isoformat()
+    end_year = datetime.now().year
+
+    # daily_hdd[date_str] = {"weighted_sum": float, "weight_total": float}
+    daily_hdd: dict[str, dict] = {}
+
+    for city, station_id in _NOAA_STATIONS.items():
+        weight = WEATHER_POINTS[city]["pop_weight"]
+        logger.info("  %s (weight=%.2f) ...", city, weight)
+
+        for year in range(start_year, end_year + 1):
+            start_date = f"{year}-01-01"
+            end_date   = (
+                f"{year}-12-31"
+                if year < end_year
+                else datetime.now().strftime("%Y-%m-%d")
+            )
+            try:
+                resp = requests.get(
+                    _NOAA_CDO_URL,
+                    params={
+                        "datasetid":  "GHCND",
+                        "stationid":  station_id,
+                        "datatypeid": "TMAX,TMIN",
+                        "startdate":  start_date,
+                        "enddate":    end_date,
+                        "limit":      1000,
+                    },
+                    headers={"token": NOAA_CDO_TOKEN},
+                    timeout=30,
+                )
+                resp.raise_for_status()
+            except requests.HTTPError as exc:
+                logger.warning("  %s %d: HTTP %s — skipping", city, year, exc)
+                time.sleep(0.5)
+                continue
+
+            results = resp.json().get("results", [])
+            # Pair TMAX and TMIN by date
+            by_date: dict[str, dict] = {}
+            for rec in results:
+                d = rec["date"][:10]           # "2010-01-01T00:00:00" -> "2010-01-01"
+                dtype = rec["datatype"]
+                value = rec["value"]           # tenths of degrees Celsius
+                by_date.setdefault(d, {})[dtype] = value
+
+            year_rows = 0
+            for d, vals in by_date.items():
+                tmax_raw = vals.get("TMAX")
+                tmin_raw = vals.get("TMIN")
+                if tmax_raw is None or tmin_raw is None:
+                    continue
+                tmax_f = (tmax_raw / 10.0) * 9 / 5 + 32
+                tmin_f = (tmin_raw / 10.0) * 9 / 5 + 32
+                avg_f  = (tmax_f + tmin_f) / 2.0
+                hdd    = max(0.0, _HDD_BASE_F - avg_f)
+
+                entry = daily_hdd.setdefault(d, {"weighted_sum": 0.0, "weight_total": 0.0})
+                entry["weighted_sum"]   += hdd * weight
+                entry["weight_total"]   += weight
+                year_rows += 1
+
+            logger.info("  %s %d: %d days processed", city, year, year_rows)
+            time.sleep(0.25)   # stay well under 5 req/s limit
+
+    # Write national weighted HDD to facts_time_series
+    total_rows = 0
+    for d_str, entry in sorted(daily_hdd.items()):
+        if entry["weight_total"] < 0.5:   # skip days with most cities missing
+            continue
+        # Normalise by actual weight coverage in case some cities had no data
+        weighted_hdd = entry["weighted_sum"] / entry["weight_total"] * sum(
+            WEATHER_POINTS[c]["pop_weight"] for c in WEATHER_POINTS
+        )
+        obs_time = f"{d_str}T00:00:00Z"
+        conn.execute(_UPSERT_SQL, [
+            "noaa_hdd_historical", "hdd_weighted_national", "US",
+            obs_time, now_str, weighted_hdd, "degree-days", "daily",
+        ])
+        total_rows += 1
+
+    logger.info("NOAA HDD backfill complete: %d daily rows written", total_rows)
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -345,7 +469,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--section",
-        choices=["storage", "cot", "prices", "all"],
+        choices=["storage", "cot", "prices", "hdd", "all"],
         default="all",
         help="Which data section to backfill (default: all)",
     )
@@ -375,6 +499,9 @@ def main() -> None:
 
         if args.section in ("prices", "all"):
             backfill_prices(conn, start=args.start)
+
+        if args.section in ("hdd", "all"):
+            backfill_noaa_hdd(conn, start_year=args.start_year)
     finally:
         conn.close()
 
