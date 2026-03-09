@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 )
 
 // Broker holds the set of active SSE subscribers and fans out messages to them.
@@ -49,6 +50,11 @@ func (b *Broker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Clear the per-response write deadline so the stream can run indefinitely.
+	// The http.Server WriteTimeout applies to all other handlers normally.
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Time{})
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -71,10 +77,18 @@ func (b *Broker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, ": connected\n\n")
 	flusher.Flush()
 
+	// Periodic keep-alive ping prevents proxies with idle-connection timeouts
+	// (e.g. nginx 75s, AWS ALB 60s) from silently dropping the stream.
+	ticker := time.NewTicker(25 * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case msg := <-ch:
 			fmt.Fprint(w, msg)
+			flusher.Flush()
+		case <-ticker.C:
+			fmt.Fprintf(w, ": ping\n\n")
 			flusher.Flush()
 		case <-r.Context().Done():
 			return
