@@ -50,8 +50,11 @@ class CollectorBase(ABC):
         try:
             requests.post(
                 NOTIFY_API_URL,
-                params={"source": source_name},
-                headers={"X-Internal-Key": INTERNAL_API_KEY},
+                data=source_name.encode(),
+                headers={
+                    "Content-Type": "text/plain",
+                    "X-Internal-Key": INTERNAL_API_KEY,
+                },
                 timeout=2,
             )
         except Exception:
