@@ -53,7 +53,9 @@ def _compute_and_write(conn, today: date, now: str) -> None:
 
     latest_date = rows[0][0]
     latest = {r[1]: r[2] for r in rows if r[0] == latest_date}
-    prior  = {r[1]: r[2] for r in rows if r[0] != latest_date}
+    prior_dates = sorted({r[0] for r in rows if r[0] != latest_date}, reverse=True)
+    prior_date  = prior_dates[0] if prior_dates else None
+    prior = {r[1]: r[2] for r in rows if r[0] == prior_date} if prior_date else {}
 
     mm_long  = latest.get("cot_mm_long")
     mm_short = latest.get("cot_mm_short")
