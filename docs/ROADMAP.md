@@ -18,7 +18,7 @@ Each feature is described with: what it is, why it matters to a nat gas trader, 
 | Feature 6 — Historical Analog Finder | ✅ Implemented | `transforms/features_analog.py`; accumulates daily snapshots; reports top-5 once ≥52 snapshots exist |
 | Feature 7 — Catalyst Calendar | ✅ Implemented | `collectors/catalyst_calendar.py`, `GET /api/calendar` |
 | Feature 8 — Storage Consensus Tracker | ✅ Implemented | `transforms/features_storage.py` additions, `consensus_inputs` table; exposed in `GET /api/storage` |
-| Feature 9 — Fair Value Model | 🔶 In progress | Lookup table implemented (`transforms/features_fairvalue.py`); OLS mode activates after `python -m scripts.backfill_history --section hdd` + `python -m scripts.refit_fairvalue` |
+| Feature 9 — Fair Value Model | ✅ Implemented | `transforms/features_fairvalue.py` (lookup table live) + `scripts/refit_fairvalue.py` (OLS); run `backfill_history --section hdd` + `refit_fairvalue` with `NOAA_CDO_TOKEN` set to activate OLS mode |
 | **Backfill script** | ✅ Implemented | `scripts/backfill_history.py` — EIA storage (5,064 rows) + CFTC COT (7,596 rows) + NG=F OHLCV (20,345 rows) + FRED spot/TTF (8,318 rows); all 2010–2026 |
 | **Schema additions** | ✅ Implemented | `feature_snapshots`, `pipeline_events` tables added to `db/schema.py` |
 | **Go API stubs** | ✅ Implemented | `GET /api/balance`, `/api/lng`, `/api/power`, `/api/calendar`, `/api/analogs` all live |
@@ -239,7 +239,7 @@ Below the terminal table: a 90-day line chart comparing AIS-implied export rate 
 ---
 
 ## Feature 3 — ISO Real-Time Power Prices (LMP) → Demand Stress Signal
-> **Status: ✅ Implemented** (`collectors/iso_lmp.py`, `transforms/features_power_demand.py`). NYISO (Zone J), MISO (Illinois Hub), and CAISO (NP15) are live via free public APIs. PJM, ERCOT, and ISO-NE are stubbed — they require registration (dataminer2.pjm.com, api.ercot.com, webservices.iso-ne.com). Composite 0–100 stress index writes to `features_daily` and `features_intraday`. Data flows to `GET /api/power`.
+> **Status: ✅ Implemented** (`collectors/iso_lmp.py`, `transforms/features_power_demand.py`). All 6 ISOs implemented: NYISO (Zone J), MISO (Illinois Hub), and CAISO (NP15) via free public APIs; PJM (Western Hub), ERCOT (HB_NORTH), and ISO-NE (Internal Hub) via registration-required APIs — set `PJM_API_KEY`, `ERCOT_SUBSCRIPTION_KEY` / `ERCOT_USERNAME` / `ERCOT_PASSWORD`, and `ISO_NE_USERNAME` / `ISO_NE_PASSWORD` in `.env` to activate. Composite 0–100 stress index writes to `features_daily` and `features_intraday`. Data flows to `GET /api/power`.
 
 ### What it is
 
@@ -734,7 +734,7 @@ This is the "intelligence monopoly is over" moment — a live, multi-layer marke
 ---
 
 ## Feature 9 — Fair Value Price Model
-> **Status: 🔶 In progress.** Price backfill is complete (Step 1 done). Next: implement `transforms/features_fairvalue.py` using the lookup table fallback. OLS regression requires the NOAA HDD backfill (Step 2) before it can be trained.
+> **Status: ✅ Implemented.** Lookup table (`transforms/features_fairvalue.py`) is live and writes `fairvalue_mid/low/high/gap` to `features_daily`. OLS mode (`scripts/refit_fairvalue.py`) is implemented and activates automatically once `transforms/fairvalue_coefficients.json` exists — generate it by running `python -m scripts.backfill_history --section hdd` (requires `NOAA_CDO_TOKEN`) followed by `python -m scripts.refit_fairvalue`.
 
 ### What it is
 
@@ -967,9 +967,10 @@ This is the "intelligence monopoly is over" moment — a live, multi-layer marke
 **Remaining work (in order):**
 
 1. ~~**Price history backfill**~~ ✅ Done — 28,663 rows written (NG=F OHLCV + FRED DHHNGSP/TTF/heating oil, 2010–2026).
-2. **Feature 9 lookup table** — implement `transforms/features_fairvalue.py` using quintile bins on storage deficit × season. All data is ready. No scikit-learn needed.
-3. **Feature 9 OLS regression** — add NOAA HDD historical backfill, write `scripts/refit_fairvalue.py`. ~2 days. Upgrades Feature 9 from lookup table to calibrated regression.
-4. **Feature 1 (Pipeline EBB)** — highest-effort remaining feature. Start with Phase 1 (Transco + Tennessee only) to validate the storage estimation approach before building all scrapers.
-5. **ISO LMP registration** — register for PJM Dataminer2, ERCOT API, and ISO-NE webservices to complete Feature 3's missing 3 ISOs.
+2. ~~**Feature 9 lookup table**~~ ✅ Done — `transforms/features_fairvalue.py` live; quintile bins on storage deficit × season.
+3. ~~**Feature 9 OLS regression**~~ ✅ Done — `scripts/refit_fairvalue.py` and `scripts/backfill_history.py --section hdd` implemented; activate by running the backfill with `NOAA_CDO_TOKEN` set, then `python -m scripts.refit_fairvalue`.
+4. ~~**ISO LMP registration**~~ ✅ Done — PJM, ERCOT, and ISO-NE fetchers implemented in `collectors/iso_lmp.py`; set credentials in `.env` to activate.
+5. **Frontend (Next.js dashboard)** — scaffold `ui/` with Next.js 15 + Tailwind v4; implement all panel endpoints; SSE-driven live refresh.
+6. **Feature 1 (Pipeline EBB)** — highest-effort remaining feature. Start with Phase 1 (Transco + Tennessee only) to validate the storage estimation approach before building all scrapers.
 
 Feature 9 is deceptively high impact for medium effort. It requires no new data collection beyond the price backfill — only a calibration script and a new transform. The output is the single number that ties every other feature together into an actionable signal. The fair value model should use the lookup table approach first and graduate to OLS once the NOAA HDD backfill is complete.
