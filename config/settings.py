@@ -5,7 +5,15 @@ load_dotenv()
 
 EIA_API_KEY      = os.environ["EIA_API_KEY"]   # raises if missing — intentional
 FRED_API_KEY     = os.environ["FRED_API_KEY"]
-AIS_HUB_USERNAME = os.environ.get("AIS_HUB_USERNAME", "")  # optional — AISHub free account
+AIS_HUB_USERNAME       = os.environ.get("AIS_HUB_USERNAME", "")
+
+NOAA_CDO_TOKEN         = os.environ.get("NOAA_CDO_TOKEN", "")
+PJM_API_KEY            = os.environ.get("PJM_API_KEY", "")
+ERCOT_SUBSCRIPTION_KEY = os.environ.get("ERCOT_SUBSCRIPTION_KEY", "")
+ERCOT_USERNAME         = os.environ.get("ERCOT_USERNAME", "")
+ERCOT_PASSWORD         = os.environ.get("ERCOT_PASSWORD", "")
+ISO_NE_USERNAME        = os.environ.get("ISO_NE_USERNAME", "")
+ISO_NE_PASSWORD        = os.environ.get("ISO_NE_PASSWORD", "")
 
 # DATA_BASE_DIR lets Docker override via env_file
 _BASE_DIR    = os.environ.get("DATA_BASE_DIR", os.path.join(os.path.dirname(__file__), "..", "data"))
