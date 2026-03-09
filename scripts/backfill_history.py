@@ -139,7 +139,7 @@ _CFTC_COLS = {
     "prod_long":       "Prod_Merc_Positions_Long_All",
     "prod_short":      "Prod_Merc_Positions_Short_All",
     "swap_long":       "Swap_Positions_Long_All",
-    "swap_short":      "Swap__Positions_Short_All",
+    "swap_short":      "Swap_Positions_Short_All",
     "contract_code":   "CFTC_Contract_Market_Code",
 }
 
