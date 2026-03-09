@@ -10,6 +10,7 @@ import logging
 import logging.config
 
 import pytz
+import requests
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -35,9 +36,35 @@ from transforms.features_price   import compute_price_features
 from transforms.features_storage import compute_storage_features
 from transforms.features_summary import save_summary
 from transforms.features_weather import compute_weather_features
-from config.settings import LOG_PATH
+from config.settings import LOG_PATH, NOTIFY_API_URL, INTERNAL_API_KEY
 
 ET = pytz.timezone("US/Eastern")
+
+
+def _notify(source: str) -> None:
+    """Fire-and-forget POST to Go API SSE broker after a transform completes."""
+    try:
+        requests.post(
+            NOTIFY_API_URL,
+            data=source.encode(),
+            headers={
+                "Content-Type": "text/plain",
+                "X-Internal-Key": INTERNAL_API_KEY,
+            },
+            timeout=2,
+        )
+    except Exception:
+        pass  # Non-critical — SSE push is best-effort
+
+
+def _notify_after(fn, source: str):
+    """Wrap a transform function so it notifies the SSE broker on success."""
+    def wrapper():
+        fn()
+        _notify(source)
+    wrapper.__name__ = f"{fn.__name__}+notify"
+    return wrapper
+
 
 _LOGGING_CONFIG = {
     "version": 1,
@@ -183,31 +210,31 @@ def _build_scheduler() -> BlockingScheduler:
     # --- Feature recomputation (staggered across the hour to avoid DB contention) ---
 
     scheduler.add_job(
-        compute_price_features,
+        _notify_after(compute_price_features, "feat_price"),
         CronTrigger(minute=10),
         id="feat_price",
         name="Price + curve features",
     )
     scheduler.add_job(
-        compute_storage_features,
+        _notify_after(compute_storage_features, "feat_storage"),
         CronTrigger(minute=15),
         id="feat_storage",
         name="Storage features (deficit, EOS projection)",
     )
     scheduler.add_job(
-        compute_weather_features,
+        _notify_after(compute_weather_features, "feat_weather"),
         CronTrigger(minute=20),
         id="feat_weather",
         name="Weather features (HDD, revision delta)",
     )
     scheduler.add_job(
-        compute_cpc_features,
+        _notify_after(compute_cpc_features, "feat_cpc"),
         CronTrigger(minute=22),
         id="feat_cpc",
         name="CPC outlook features (6-10 / 8-14 day weighted prob below)",
     )
     scheduler.add_job(
-        compute_cot_features,
+        _notify_after(compute_cot_features, "feat_cot"),
         CronTrigger(minute=25),
         id="feat_cot",
         name="COT positioning features",
@@ -215,7 +242,7 @@ def _build_scheduler() -> BlockingScheduler:
 
     # Power demand z-scores: runs after LMP collector at :10
     scheduler.add_job(
-        compute_power_demand_features,
+        _notify_after(compute_power_demand_features, "feat_power_demand"),
         CronTrigger(minute=12),
         id="feat_power_demand",
         name="ISO LMP stress z-scores + composite demand index",
@@ -223,7 +250,7 @@ def _build_scheduler() -> BlockingScheduler:
 
     # LNG export features: runs after AIS collector (at :02 and :32)
     scheduler.add_job(
-        compute_lng_features,
+        _notify_after(compute_lng_features, "feat_lng"),
         CronTrigger(minute="2,32"),
         id="feat_lng",
         name="LNG implied export rate + terminal utilization",
@@ -231,7 +258,7 @@ def _build_scheduler() -> BlockingScheduler:
 
     # Fundamental score + what-changed: runs after all features are refreshed
     scheduler.add_job(
-        save_summary,
+        _notify_after(save_summary, "summary"),
         CronTrigger(minute=30),
         id="summary",
         name="Fundamental score + what-changed summary",
@@ -239,7 +266,7 @@ def _build_scheduler() -> BlockingScheduler:
 
     # Historical analog finder: runs after summary so all features are fresh
     scheduler.add_job(
-        compute_analog_features,
+        _notify_after(compute_analog_features, "feat_analog"),
         CronTrigger(minute=35),
         id="feat_analog",
         name="Historical analog finder (cosine similarity on feature snapshots)",
@@ -247,7 +274,7 @@ def _build_scheduler() -> BlockingScheduler:
 
     # Fair value model: lookup table (OLS after refit_fairvalue.py is run)
     scheduler.add_job(
-        compute_fairvalue_features,
+        _notify_after(compute_fairvalue_features, "feat_fairvalue"),
         CronTrigger(minute=40),
         id="feat_fairvalue",
         name="Fair value price model (lookup table / OLS)",
