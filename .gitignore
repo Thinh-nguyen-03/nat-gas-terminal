@@ -12,6 +12,7 @@ __pycache__/
 # Go
 api/vendor/
 api/*.exe
+api/*.exe~
 api/api
 api/*.txt
 api/*.bat
@@ -20,11 +21,16 @@ api/*.bat
 frontend/node_modules/
 frontend/.next/
 frontend/out/
+ui/node_modules/
+ui/.next/
+ui/out/
+ui/tsconfig.tsbuildinfo
 
 # Data — live on the Docker volume, not in git
 data/db/
 data/raw/
 data/forecasts_archive/
+data/ais_snapshot.json
 logs/
 
 # Keep the folder skeletons
