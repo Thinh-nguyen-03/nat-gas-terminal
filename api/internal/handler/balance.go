@@ -75,9 +75,11 @@ func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) queryBalanceSupply(r *http.Request) ([]BalanceComponent, error) {
+	db := h.DB
+
 	// Pull the most recent value for each supply component from features_daily.
 	// The feature names match what EIASupplyCollector + features_supply write.
-	rows, err := h.DB.QueryContext(r.Context(), `
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT feature_name, value, computed_at::VARCHAR
 		FROM (
 		    SELECT feature_name, value, computed_at,
@@ -135,10 +137,12 @@ func (h *Handler) queryBalanceSupply(r *http.Request) ([]BalanceComponent, error
 }
 
 func (h *Handler) queryBalanceDemand(r *http.Request) ([]BalanceComponent, error) {
+	db := h.DB
+
 	// Mix of real features (power burn, HDD-implied resi/comm) and stubs
 	// (LNG via AIS, pipeline exports via EBB) that will populate as more
 	// collectors come online.
-	rows, err := h.DB.QueryContext(r.Context(), `
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT feature_name, value, computed_at::VARCHAR
 		FROM (
 		    SELECT feature_name, value, computed_at,

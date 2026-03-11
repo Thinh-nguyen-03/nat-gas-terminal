@@ -80,12 +80,14 @@ var storageFeatureNames = []string{
 // Storage handles GET /api/storage.
 // Returns today's computed storage features and the EIA 5-year band values.
 func (h *Handler) Storage(w http.ResponseWriter, r *http.Request) {
+	db := h.DB
+
 	args := make([]any, len(storageFeatureNames))
 	for i, n := range storageFeatureNames {
 		args[i] = n
 	}
 
-	rows, err := h.DB.QueryContext(r.Context(), `
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT feature_name, value, interpretation, confidence, computed_at
 		FROM features_daily
 		WHERE feature_name IN (`+inClause(len(storageFeatureNames))+`)
@@ -125,13 +127,13 @@ func (h *Handler) Storage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	history, err := h.queryStorageHistory(r)
+	history, err := h.queryStorageHistory(r, db)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
 	}
 
-	surpHist, err := h.querySurpriseHistory(r)
+	surpHist, err := h.querySurpriseHistory(r, db)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
@@ -139,16 +141,16 @@ func (h *Handler) Storage(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, StorageResponse{
 		Features:         features,
-		Band:             h.queryStorageBand(r),
-		LatestWeekEnding: h.queryLatestStorageWeek(r),
-		Consensus:        h.queryStorageConsensus(r),
+		Band:             h.queryStorageBand(r, db),
+		LatestWeekEnding: h.queryLatestStorageWeek(r, db),
+		Consensus:        h.queryStorageConsensus(r, db),
 		SurpriseHistory:  surpHist,
 		History:          history,
 	})
 }
 
-func (h *Handler) queryStorageBand(r *http.Request) *StorageBand {
-	rows, err := h.DB.QueryContext(r.Context(), `
+func (h *Handler) queryStorageBand(r *http.Request, db *sql.DB) *StorageBand {
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT series_name, value, observation_time::TIMESTAMP::DATE::VARCHAR
 		FROM facts_time_series
 		WHERE source_name = 'eia_storage_stats'
@@ -194,8 +196,8 @@ func (h *Handler) queryStorageBand(r *http.Request) *StorageBand {
 	return band
 }
 
-func (h *Handler) queryLatestStorageWeek(r *http.Request) *string {
-	row := h.DB.QueryRowContext(r.Context(), `
+func (h *Handler) queryLatestStorageWeek(r *http.Request, db *sql.DB) *string {
+	row := db.QueryRowContext(r.Context(), `
 		SELECT observation_time::TIMESTAMP::DATE::VARCHAR
 		FROM facts_time_series
 		WHERE source_name = 'eia_storage' AND series_name = 'storage_total'
@@ -211,8 +213,8 @@ func (h *Handler) queryLatestStorageWeek(r *http.Request) *string {
 
 // queryStorageHistory returns up to 52 weeks of total US storage inventory
 // joined with the EIA 5-year band (avg/max/min) for each matching week.
-func (h *Handler) queryStorageHistory(r *http.Request) ([]StorageHistoryPoint, error) {
-	rows, err := h.DB.QueryContext(r.Context(), `
+func (h *Handler) queryStorageHistory(r *http.Request, db *sql.DB) ([]StorageHistoryPoint, error) {
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT
 		    s.observation_time::TIMESTAMP::DATE::VARCHAR AS week_ending,
 		    s.value AS total_bcf,
@@ -259,8 +261,8 @@ func (h *Handler) queryStorageHistory(r *http.Request) ([]StorageHistoryPoint, e
 
 // queryStorageConsensus returns the most recent consensus estimate from
 // consensus_inputs, joined with the model estimate from features_daily.
-func (h *Handler) queryStorageConsensus(r *http.Request) *StorageConsensus {
-	row := h.DB.QueryRowContext(r.Context(), `
+func (h *Handler) queryStorageConsensus(r *http.Request, db *sql.DB) *StorageConsensus {
+	row := db.QueryRowContext(r.Context(), `
 		SELECT
 		    input_date::VARCHAR,
 		    MAX(CASE WHEN input_type = 'eia_storage_consensus'     THEN value END),
@@ -288,7 +290,7 @@ func (h *Handler) queryStorageConsensus(r *http.Request) *StorageConsensus {
 	}
 
 	// Pull the model estimate from features_daily (written by features_storage.py).
-	modelRow := h.DB.QueryRowContext(r.Context(), `
+	modelRow := db.QueryRowContext(r.Context(), `
 		SELECT value FROM features_daily
 		WHERE feature_name = 'storage_consensus_bcf' AND region = 'US'
 		ORDER BY feature_date DESC LIMIT 1
@@ -308,8 +310,8 @@ func (h *Handler) queryStorageConsensus(r *http.Request) *StorageConsensus {
 
 // querySurpriseHistory returns up to 52 weeks of EIA storage surprise data
 // (actual WoW change vs consensus) from features_daily, newest first.
-func (h *Handler) querySurpriseHistory(r *http.Request) ([]StorageSurprisePoint, error) {
-	rows, err := h.DB.QueryContext(r.Context(), `
+func (h *Handler) querySurpriseHistory(r *http.Request, db *sql.DB) ([]StorageSurprisePoint, error) {
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT
 		    feature_date::VARCHAR,
 		    MAX(CASE WHEN feature_name = 'storage_wow_change_bcf'   THEN value END) AS actual,

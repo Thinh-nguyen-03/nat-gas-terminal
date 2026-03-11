@@ -30,9 +30,19 @@ type HealthResponse struct {
 // Returns database connectivity status and last-known status for every
 // registered collector.
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
-	dbOk := h.DB.PingContext(r.Context()) == nil
+	db := h.DB
+	dbOk := db.PingContext(r.Context()) == nil
 
-	rows, err := h.DB.QueryContext(r.Context(), `
+	if !dbOk {
+		writeJSON(w, http.StatusServiceUnavailable, HealthResponse{
+			DBOk:       false,
+			Collectors: []CollectorStatus{},
+			ServerTime: time.Now().UTC(),
+		})
+		return
+	}
+
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT
 		    source_name,
 		    last_attempt,

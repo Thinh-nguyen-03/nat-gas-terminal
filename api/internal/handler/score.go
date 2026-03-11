@@ -37,7 +37,9 @@ type ScoreResponse struct {
 // It returns the most recent fundamental score and what-changed table from
 // summary_outputs, which the Python transform layer writes after each run.
 func (h *Handler) Score(w http.ResponseWriter, r *http.Request) {
-	row := h.DB.QueryRowContext(r.Context(), `
+	db := h.DB
+
+	row := db.QueryRowContext(r.Context(), `
 		SELECT summary_date, content, generated_at
 		FROM summary_outputs
 		WHERE summary_type = 'fundamental_score'
@@ -71,7 +73,7 @@ func (h *Handler) Score(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch what_changed for the same date.
 	var whatChanged []map[string]any
-	wcRow := h.DB.QueryRowContext(r.Context(), `
+	wcRow := db.QueryRowContext(r.Context(), `
 		SELECT content
 		FROM summary_outputs
 		WHERE summary_type = 'what_changed'
@@ -85,7 +87,7 @@ func (h *Handler) Score(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	history, err := h.queryScoreHistory(r)
+	history, err := h.queryScoreHistory(r, db)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
@@ -104,8 +106,8 @@ func (h *Handler) Score(w http.ResponseWriter, r *http.Request) {
 
 // queryScoreHistory returns up to 90 days of composite fundamental scores
 // from summary_outputs, newest first.
-func (h *Handler) queryScoreHistory(r *http.Request) ([]ScoreHistoryPoint, error) {
-	rows, err := h.DB.QueryContext(r.Context(), `
+func (h *Handler) queryScoreHistory(r *http.Request, db *sql.DB) ([]ScoreHistoryPoint, error) {
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT summary_date, content
 		FROM summary_outputs
 		WHERE summary_type = 'fundamental_score'

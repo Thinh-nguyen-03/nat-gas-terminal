@@ -60,31 +60,33 @@ type PriceResponse struct {
 
 // Price handles GET /api/price.
 func (h *Handler) Price(w http.ResponseWriter, r *http.Request) {
-	history, err := h.queryOHLCV(r)
+	db := h.DB
+
+	history, err := h.queryOHLCV(r, db)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
 	}
 
-	curve, err := h.queryForwardCurve(r)
+	curve, err := h.queryForwardCurve(r, db)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
 	}
 
-	spot, err := h.queryFredSpot(r, "ng_spot_price")
+	spot, err := h.queryFredSpot(r, db, "ng_spot_price")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
 	}
 
-	heatingOil, err := h.queryFredSpot(r, "heating_oil_spot")
+	heatingOil, err := h.queryFredSpot(r, db, "heating_oil_spot")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
 	}
 
-	ttf, err := h.queryFredSpot(r, "ttf_spot")
+	ttf, err := h.queryFredSpot(r, db, "ttf_spot")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
@@ -96,12 +98,12 @@ func (h *Handler) Price(w http.ResponseWriter, r *http.Request) {
 		Spot:       spot,
 		HeatingOil: heatingOil,
 		TTFHistory: ttf,
-		LNGArb:     h.queryLNGArb(r),
+		LNGArb:     h.queryLNGArb(r, db),
 	})
 }
 
-func (h *Handler) queryOHLCV(r *http.Request) ([]PriceBar, error) {
-	rows, err := h.DB.QueryContext(r.Context(), `
+func (h *Handler) queryOHLCV(r *http.Request, db *sql.DB) ([]PriceBar, error) {
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT
 		    observation_time::TIMESTAMP::DATE::VARCHAR,
 		    MAX(CASE WHEN series_name = 'ng_front_open'   THEN value END),
@@ -145,10 +147,10 @@ func (h *Handler) queryOHLCV(r *http.Request) ([]PriceBar, error) {
 	return out, nil
 }
 
-func (h *Handler) queryForwardCurve(r *http.Request) ([]CurvePoint, error) {
+func (h *Handler) queryForwardCurve(r *http.Request, db *sql.DB) ([]CurvePoint, error) {
 	// Return the most recent intraday snapshot for each curve contract.
 	// Inner query selects the max observation_time per series; outer join fetches value.
-	rows, err := h.DB.QueryContext(r.Context(), `
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT t.series_name, t.value, t.observation_time
 		FROM facts_time_series t
 		INNER JOIN (
@@ -195,8 +197,8 @@ func (h *Handler) queryForwardCurve(r *http.Request) ([]CurvePoint, error) {
 	return out, nil
 }
 
-func (h *Handler) queryFredSpot(r *http.Request, seriesName string) ([]SpotPoint, error) {
-	rows, err := h.DB.QueryContext(r.Context(), `
+func (h *Handler) queryFredSpot(r *http.Request, db *sql.DB, seriesName string) ([]SpotPoint, error) {
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT observation_time::TIMESTAMP::DATE::VARCHAR, value
 		FROM facts_time_series
 		WHERE source_name = 'fred' AND series_name = ?
@@ -227,8 +229,8 @@ func (h *Handler) queryFredSpot(r *http.Request, seriesName string) ([]SpotPoint
 // queryLNGArb returns the most recent TTF→HH LNG export arbitrage spread
 // from features_daily (written by transforms/features_price.py).
 // Returns nil if TTF data has not yet arrived from FRED.
-func (h *Handler) queryLNGArb(r *http.Request) *LNGArbData {
-	row := h.DB.QueryRowContext(r.Context(), `
+func (h *Handler) queryLNGArb(r *http.Request, db *sql.DB) *LNGArbData {
+	row := db.QueryRowContext(r.Context(), `
 		SELECT
 		    feature_date::VARCHAR,
 		    MAX(CASE WHEN feature_name = 'ttf_spot_usd_mmbtu' THEN value END),

@@ -39,12 +39,14 @@ var cotFeatureNames = []string{
 
 // COT handles GET /api/cot.
 func (h *Handler) COT(w http.ResponseWriter, r *http.Request) {
+	db := h.DB
+
 	args := make([]any, len(cotFeatureNames))
 	for i, n := range cotFeatureNames {
 		args[i] = n
 	}
 
-	frows, err := h.DB.QueryContext(r.Context(), `
+	frows, err := db.QueryContext(r.Context(), `
 		SELECT feature_name, value, interpretation, computed_at
 		FROM features_daily
 		WHERE feature_name IN (`+inClause(len(cotFeatureNames))+`)
@@ -83,7 +85,7 @@ func (h *Handler) COT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	history, err := h.queryCOTHistory(r)
+	history, err := h.queryCOTHistory(r, db)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
@@ -95,8 +97,8 @@ func (h *Handler) COT(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) queryCOTHistory(r *http.Request) ([]COTHistoryPoint, error) {
-	rows, err := h.DB.QueryContext(r.Context(), `
+func (h *Handler) queryCOTHistory(r *http.Request, db *sql.DB) ([]COTHistoryPoint, error) {
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT
 		    observation_time::TIMESTAMP::DATE::VARCHAR,
 		    MAX(CASE WHEN series_name = 'cot_mm_long'       THEN value END)

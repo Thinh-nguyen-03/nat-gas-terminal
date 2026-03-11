@@ -46,7 +46,9 @@ type AnalogsResponse struct {
 // (written by transforms/features_analog.py, not yet implemented).
 // Returns an empty list until the analog transform is running.
 func (h *Handler) Analogs(w http.ResponseWriter, r *http.Request) {
-	row := h.DB.QueryRowContext(r.Context(), `
+	db := h.DB
+
+	row := db.QueryRowContext(r.Context(), `
 		SELECT content, generated_at::VARCHAR
 		FROM summary_outputs
 		WHERE summary_type = 'analog_finder'
@@ -89,7 +91,9 @@ func (h *Handler) Analogs(w http.ResponseWriter, r *http.Request) {
 // AnalogsUpdatedAt returns the timestamp of the most recent analog computation,
 // or the zero time if no results exist yet. Used by the SSE broker.
 func (h *Handler) AnalogsUpdatedAt(r *http.Request) time.Time {
-	row := h.DB.QueryRowContext(r.Context(), `
+	db := h.DB
+
+	row := db.QueryRowContext(r.Context(), `
 		SELECT generated_at FROM summary_outputs
 		WHERE summary_type = 'analog_finder'
 		ORDER BY summary_date DESC LIMIT 1

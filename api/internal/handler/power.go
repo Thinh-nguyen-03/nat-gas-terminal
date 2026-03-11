@@ -57,16 +57,18 @@ var knownISOs = []ISOPowerData{
 // Returns the ISO list with signal="unknown" until collectors/iso_lmp.py
 // (Feature 3) is running and populating facts_time_series with source_name='iso_lmp'.
 func (h *Handler) Power(w http.ResponseWriter, r *http.Request) {
-	isos, hasLiveData, err := h.queryISOLMPs(r)
+	db := h.DB
+
+	isos, hasLiveData, err := h.queryISOLMPs(r, db)
 	if err != nil {
 		slog.Error("power iso query failed", "err", err)
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
 	}
 
-	summary := h.queryPowerSummary(r)
+	summary := h.queryPowerSummary(r, db)
 
-	history, err := h.queryPowerHistory(r)
+	history, err := h.queryPowerHistory(r, db)
 	if err != nil {
 		slog.Error("power history query failed", "err", err)
 		writeError(w, http.StatusInternalServerError, "database error")
@@ -81,8 +83,8 @@ func (h *Handler) Power(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) queryISOLMPs(r *http.Request) ([]ISOPowerData, bool, error) {
-	rows, err := h.DB.QueryContext(r.Context(), `
+func (h *Handler) queryISOLMPs(r *http.Request, db *sql.DB) ([]ISOPowerData, bool, error) {
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT region, series_name, value, observation_time::VARCHAR
 		FROM (
 		    SELECT region, series_name, value, observation_time,
@@ -90,7 +92,7 @@ func (h *Handler) queryISOLMPs(r *http.Request) ([]ISOPowerData, bool, error) {
 		    FROM facts_time_series
 		    WHERE source_name = 'iso_lmp'
 		      AND series_name = 'lmp_hub'
-		      AND observation_time >= NOW() - INTERVAL '4 hours'
+		      AND observation_time >= NOW()::TIMESTAMP - INTERVAL '4 hours'
 		) ranked
 		WHERE rn = 1
 	`)
@@ -133,7 +135,7 @@ func (h *Handler) queryISOLMPs(r *http.Request) ([]ISOPowerData, bool, error) {
 
 		// Z-score and stress signal come from features_daily once the
 		// power demand transform (features_power_demand.py) is running.
-		zRow := h.DB.QueryRowContext(r.Context(), `
+		zRow := db.QueryRowContext(r.Context(), `
 			SELECT value FROM features_daily
 			WHERE feature_name = 'lmp_stress_score'
 			  AND region = ?
@@ -151,9 +153,9 @@ func (h *Handler) queryISOLMPs(r *http.Request) ([]ISOPowerData, bool, error) {
 	return isos, hasLiveData, nil
 }
 
-func (h *Handler) queryPowerSummary(r *http.Request) PowerDemandSummary {
+func (h *Handler) queryPowerSummary(r *http.Request, db *sql.DB) PowerDemandSummary {
 	var s PowerDemandSummary
-	row := h.DB.QueryRowContext(r.Context(), `
+	row := db.QueryRowContext(r.Context(), `
 		SELECT value, interpretation, computed_at::VARCHAR
 		FROM features_daily
 		WHERE feature_name = 'power_demand_stress_index'
@@ -178,8 +180,8 @@ func (h *Handler) queryPowerSummary(r *http.Request) PowerDemandSummary {
 	return s
 }
 
-func (h *Handler) queryPowerHistory(r *http.Request) ([]PowerHistoryPoint, error) {
-	rows, err := h.DB.QueryContext(r.Context(), `
+func (h *Handler) queryPowerHistory(r *http.Request, db *sql.DB) ([]PowerHistoryPoint, error) {
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT ts::VARCHAR, value
 		FROM features_intraday
 		WHERE feature_name = 'power_demand_stress_index'

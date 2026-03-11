@@ -31,6 +31,8 @@ import (
 
 	"golang.org/x/time/rate"
 
+	"path/filepath"
+
 	appdb "github.com/nat-gas-terminal/api/internal/db"
 	"github.com/nat-gas-terminal/api/internal/handler"
 	"github.com/nat-gas-terminal/api/internal/sse"
@@ -45,18 +47,20 @@ func main() {
 	internalKey := env("INTERNAL_API_KEY", "")
 	allowedOrigin := env("ALLOWED_ORIGIN", "http://localhost:3000")
 
-	db, err := appdb.Open(dbPath)
+	database, err := appdb.Open(dbPath)
 	if err != nil {
-		slog.Error("failed to open database", "path", dbPath, "err", err)
+		slog.Error("open db failed", "err", err)
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer database.Close()
 
 	broker := sse.NewBroker()
 	h := &handler.Handler{
-		DB:          db,
 		Broker:      broker,
 		InternalKey: internalKey,
+		DB:          database,
+		SnapshotDir: filepath.Join(filepath.Dir(dbPath), ".."),
+		AIS:         handler.NewAISState(),
 	}
 
 	mux := http.NewServeMux()
@@ -80,11 +84,13 @@ func main() {
 	mux.HandleFunc("GET /api/calendar", h.Calendar)
 	mux.HandleFunc("GET /api/analogs",  h.Analogs)
 	mux.HandleFunc("GET /api/balance",  h.Balance)
-	mux.HandleFunc("GET /api/lng",      h.LNG)
-	mux.HandleFunc("GET /api/power",    h.Power)
+	mux.HandleFunc("GET /api/lng",         h.LNG)
+	mux.HandleFunc("GET /api/lng/vessels", h.LNGVessels)
+	mux.HandleFunc("GET /api/power",       h.Power)
 
-	// Internal endpoint called by the Python scheduler — not exposed publicly.
+	// Internal endpoints — not exposed publicly.
 	mux.HandleFunc("POST /internal/notify", h.Notify)
+	mux.HandleFunc("POST /internal/ais",    h.AISUpdate)
 
 	srv := &http.Server{
 		Addr:    ":" + port,
@@ -163,7 +169,7 @@ func limitMiddleware(next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/internal/notify" && !notifyLim.Allow() {
+		if (r.URL.Path == "/internal/notify" || r.URL.Path == "/internal/ais") && !notifyLim.Allow() {
 			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
 			return
 		}

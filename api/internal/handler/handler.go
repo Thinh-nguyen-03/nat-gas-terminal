@@ -15,11 +15,18 @@ import (
 
 // Handler holds shared dependencies injected at startup.
 type Handler struct {
-	DB     *sql.DB
 	Broker *sse.Broker
-	// InternalKey is the pre-shared key required on POST /internal/notify.
+	// InternalKey is the pre-shared key required on POST /internal/notify and /internal/ais.
 	// An empty string disables the check (development only).
 	InternalKey string
+	// DB is the shared read-only DuckDB connection pool, opened once at startup.
+	// SetMaxOpenConns(1)+SetMaxIdleConns(0) ensures the file lock is released between
+	// queries so the Python scheduler can write, while serializing concurrent Go requests.
+	DB *sql.DB
+	// SnapshotDir is the directory where ais_snapshot.json is written (data/ dir).
+	SnapshotDir string
+	// AIS holds the latest vessel snapshot received from cmd/ais.
+	AIS *AISState
 }
 
 // writeJSON serialises v as JSON and writes it with the given status code.

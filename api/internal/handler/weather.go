@@ -66,28 +66,30 @@ var weatherCities = []string{
 
 // Weather handles GET /api/weather.
 func (h *Handler) Weather(w http.ResponseWriter, r *http.Request) {
-	summary, err := h.queryWeatherSummary(r)
+	db := h.DB
+
+	summary, err := h.queryWeatherSummary(r, db)
 	if err != nil {
 		slog.Error("weather summary query failed", "err", err)
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
 	}
 
-	cities, err := h.queryWeatherCities(r)
+	cities, err := h.queryWeatherCities(r, db)
 	if err != nil {
 		slog.Error("weather cities query failed", "err", err)
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
 	}
 
-	history, err := h.queryWeatherHistory(r)
+	history, err := h.queryWeatherHistory(r, db)
 	if err != nil {
 		slog.Error("weather history query failed", "err", err)
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
 	}
 
-	cpc, err := h.queryCPCOutlook(r)
+	cpc, err := h.queryCPCOutlook(r, db)
 	if err != nil {
 		slog.Error("cpc outlook query failed", "err", err)
 		writeError(w, http.StatusInternalServerError, "database error")
@@ -102,9 +104,9 @@ func (h *Handler) Weather(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) queryWeatherSummary(r *http.Request) (WeatherSummary, error) {
+func (h *Handler) queryWeatherSummary(r *http.Request, db *sql.DB) (WeatherSummary, error) {
 	var s WeatherSummary
-	row := h.DB.QueryRowContext(r.Context(), `
+	row := db.QueryRowContext(r.Context(), `
 		SELECT
 		    feature_date::VARCHAR,
 		    MAX(CASE WHEN feature_name = 'weather_hdd_7d_weighted'          THEN value END),
@@ -141,8 +143,8 @@ func (h *Handler) queryWeatherSummary(r *http.Request) (WeatherSummary, error) {
 
 // queryWeatherHistory returns up to 90 days of population-weighted HDD/CDD
 // from the features_daily table, newest first.
-func (h *Handler) queryWeatherHistory(r *http.Request) ([]WeatherHistoryPoint, error) {
-	rows, err := h.DB.QueryContext(r.Context(), `
+func (h *Handler) queryWeatherHistory(r *http.Request, db *sql.DB) ([]WeatherHistoryPoint, error) {
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT
 		    feature_date::VARCHAR,
 		    MAX(CASE WHEN feature_name = 'weather_hdd_7d_weighted' THEN value END),
@@ -179,7 +181,7 @@ func (h *Handler) queryWeatherHistory(r *http.Request) ([]WeatherHistoryPoint, e
 	return out, nil
 }
 
-func (h *Handler) queryWeatherCities(r *http.Request) ([]WeatherCity, error) {
+func (h *Handler) queryWeatherCities(r *http.Request, db *sql.DB) ([]WeatherCity, error) {
 	// NWS data is stored with the stat name in series_name and the city in region.
 	// e.g. series_name='forecast_hdd_65', region='chicago'
 	const (
@@ -195,7 +197,7 @@ func (h *Handler) queryWeatherCities(r *http.Request) ([]WeatherCity, error) {
 		args = append(args, city)
 	}
 
-	rows, err := h.DB.QueryContext(r.Context(), `
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT t.series_name, t.region, t.value, t.observation_time::TIMESTAMP::DATE::VARCHAR
 		FROM facts_time_series t
 		INNER JOIN (
@@ -271,10 +273,10 @@ func (h *Handler) queryWeatherCities(r *http.Request) ([]WeatherCity, error) {
 
 // queryCPCOutlook returns the most recent CPC 6-10 and 8-14 day outlook windows
 // from features_daily (computed by transforms/features_cpc.py).
-func (h *Handler) queryCPCOutlook(r *http.Request) (CPCOutlook, error) {
+func (h *Handler) queryCPCOutlook(r *http.Request, db *sql.DB) (CPCOutlook, error) {
 	var outlook CPCOutlook
 
-	rows, err := h.DB.QueryContext(r.Context(), `
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT feature_name, value, interpretation, feature_date::VARCHAR
 		FROM (
 		    SELECT feature_name, value, interpretation, feature_date,

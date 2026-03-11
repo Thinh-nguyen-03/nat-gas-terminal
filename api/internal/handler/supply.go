@@ -48,6 +48,8 @@ var supplySeriesNames = []string{
 // Returns the latest value plus trailing 12-month history for each EIA supply
 // fundamental series.
 func (h *Handler) Supply(w http.ResponseWriter, r *http.Request) {
+	db := h.DB
+
 	args := make([]any, len(supplySeriesNames))
 	for i, n := range supplySeriesNames {
 		args[i] = n
@@ -55,7 +57,7 @@ func (h *Handler) Supply(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch the most recent 12 months of observations per series in one query.
 	// We use a window function to rank rows per series by date, then filter.
-	rows, err := h.DB.QueryContext(r.Context(), `
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT series_name, value, unit,
 		       observation_time::TIMESTAMP::DATE::VARCHAR AS period_date,
 		       ingest_time
@@ -131,7 +133,7 @@ func (h *Handler) Supply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Append rig count from baker_hughes source (separate source_name, separate query).
-	rigCount, err := h.queryRigCount(r)
+	rigCount, err := h.queryRigCount(r, db)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
@@ -145,8 +147,8 @@ func (h *Handler) Supply(w http.ResponseWriter, r *http.Request) {
 
 // queryRigCount returns the US natural gas rig count series from Baker Hughes,
 // up to 104 weeks of history (weekly frequency).
-func (h *Handler) queryRigCount(r *http.Request) (*SupplySeries, error) {
-	rows, err := h.DB.QueryContext(r.Context(), `
+func (h *Handler) queryRigCount(r *http.Request, db *sql.DB) (*SupplySeries, error) {
+	rows, err := db.QueryContext(r.Context(), `
 		SELECT value, unit,
 		       observation_time::TIMESTAMP::DATE::VARCHAR AS period_date,
 		       ingest_time
