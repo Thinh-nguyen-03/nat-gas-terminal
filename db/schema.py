@@ -161,6 +161,28 @@ def initialize_schema():
         )
         """,
 
+        # AIS vessel snapshot — one row per vessel per terminal, replaced every 5 min
+        # by the Go cmd/ais binary. Enables per-vessel manifest display and EPI.
+        # first_seen_at is preserved on conflict; dwell_minutes updated by the binary.
+        """
+        CREATE TABLE IF NOT EXISTS ais_vessels (
+            mmsi          INTEGER NOT NULL,
+            name          VARCHAR,
+            terminal      VARCHAR NOT NULL,
+            status        VARCHAR NOT NULL,
+            lat           DOUBLE,
+            lon           DOUBLE,
+            sog           DOUBLE,
+            nav_status    INTEGER,
+            destination   VARCHAR,
+            draught       DOUBLE,
+            dwell_minutes INTEGER NOT NULL DEFAULT 0,
+            first_seen_at TIMESTAMPTZ NOT NULL,
+            observed_at   TIMESTAMPTZ NOT NULL,
+            PRIMARY KEY (mmsi, terminal)
+        )
+        """,
+
         # Pipeline events — OFOs, capacity constraints, maintenance windows.
         # Written by collectors/pipeline_ebb.py (Feature 1 Phase 3).
         # Also supports manual entry for known terminal maintenance.
@@ -178,6 +200,7 @@ def initialize_schema():
             ingest_time           TIMESTAMPTZ NOT NULL
         )
         """,
+
     ]
 
     for sql in statements:

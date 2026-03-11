@@ -16,7 +16,6 @@ from apscheduler.triggers.cron import CronTrigger
 
 from collectors.catalyst_calendar import CatalystCalendarCollector
 from collectors.iso_lmp            import ISOLMPCollector
-from collectors.lng_vessels        import LNGVesselsCollector
 from collectors.cftc              import CFTCCollector
 from collectors.cpc_outlook       import CPCOutlookCollector
 from collectors.eia_storage       import EIAStorageCollector
@@ -198,14 +197,8 @@ def _build_scheduler() -> BlockingScheduler:
         misfire_grace_time=300,
     )
 
-    # AIS LNG vessel tracking: every 30 minutes (AISHub free tier — 1 req/min limit)
-    scheduler.add_job(
-        LNGVesselsCollector().run,
-        CronTrigger(minute="0,30"),
-        id="lng_vessels",
-        name="AIS LNG vessel berth status (7 US export terminals)",
-        misfire_grace_time=300,
-    )
+    # AIS LNG vessel tracking is handled by the Go cmd/ais binary (persistent
+    # WebSocket connection). No Python job needed here.
 
     # --- Feature recomputation (staggered across the hour to avoid DB contention) ---
 
@@ -248,10 +241,10 @@ def _build_scheduler() -> BlockingScheduler:
         name="ISO LMP stress z-scores + composite demand index",
     )
 
-    # LNG export features: runs after AIS collector (at :02 and :32)
+    # LNG export features: every 10 minutes (Go cmd/ais writes vessel data every 5 min)
     scheduler.add_job(
         _notify_after(compute_lng_features, "feat_lng"),
-        CronTrigger(minute="2,32"),
+        CronTrigger(minute="5,15,25,35,45,55"),
         id="feat_lng",
         name="LNG implied export rate + terminal utilization",
     )
@@ -291,7 +284,7 @@ def main() -> None:
 
     logger.info("Scheduler starting — %d jobs registered", len(scheduler.get_jobs()))
     for job in scheduler.get_jobs():
-        logger.info("  job: %s | next: %s", job.name, job.next_run_time)
+        logger.info("  job: %s | next: %s", job.name, getattr(job, "next_run_time", "pending"))
 
     try:
         scheduler.start()

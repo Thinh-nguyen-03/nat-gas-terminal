@@ -5,7 +5,7 @@ load_dotenv()
 
 EIA_API_KEY      = os.environ["EIA_API_KEY"]   # raises if missing — intentional
 FRED_API_KEY     = os.environ["FRED_API_KEY"]
-AIS_HUB_USERNAME       = os.environ.get("AIS_HUB_USERNAME", "")
+AISSTREAM_API_KEY      = os.environ.get("AISSTREAM_API_KEY", "")
 
 NOAA_CDO_TOKEN         = os.environ.get("NOAA_CDO_TOKEN", "")
 PJM_API_KEY            = os.environ.get("PJM_API_KEY", "")
