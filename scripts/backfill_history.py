@@ -84,7 +84,7 @@ _EIA_MAX_LENGTH = 2000
 def backfill_eia_storage(conn, start: str = "2010-01-01") -> None:
     """Pull EIA weekly storage stocks (Bcf) using the same seriesid endpoint
     as the live EIAStorageCollector, but with extended history."""
-    logger.info("=== EIA storage backfill (start=%s) ===", start)
+    logger.info("EIA storage backfill (start=%s)", start)
     now_str = datetime.now(timezone.utc).isoformat()
     total_rows = 0
 
@@ -148,7 +148,7 @@ def backfill_cftc_cot(conn, start_year: int = 2010) -> None:
     """Pull CFTC disaggregated COT history from annual ZIP files."""
     import csv
 
-    logger.info("=== CFTC COT backfill (start_year=%d) ===", start_year)
+    logger.info("CFTC COT backfill (start_year=%d)", start_year)
     now_str  = datetime.now(timezone.utc).isoformat()
     end_year = datetime.now().year
     total_rows = 0
@@ -269,7 +269,7 @@ def backfill_prices(conn, start: str = "2010-01-01") -> None:
     import yfinance as yf
     from fredapi import Fred
 
-    logger.info("=== Price backfill (start=%s) ===", start)
+    logger.info("Price backfill (start=%s)", start)
     now_str = datetime.now(timezone.utc).isoformat()
     total_rows = 0
 
@@ -376,7 +376,7 @@ def backfill_noaa_hdd(conn, start_year: int = 2010) -> None:
 
     from collectors.weather import WEATHER_POINTS
 
-    logger.info("=== NOAA HDD backfill (start_year=%d) ===", start_year)
+    logger.info("NOAA HDD backfill (start_year=%d)", start_year)
     now_str  = datetime.now(timezone.utc).isoformat()
     end_year = datetime.now().year
 

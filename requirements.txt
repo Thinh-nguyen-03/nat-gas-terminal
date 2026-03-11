@@ -12,6 +12,7 @@ openpyxl==3.1.5
 
 # Sources
 yfinance==0.2.51
+websockets==13.1
 fredapi==0.5.2
 pyshp==3.0.3
 

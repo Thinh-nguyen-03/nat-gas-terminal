@@ -4,6 +4,121 @@ Operational procedures for the Natural Gas Intelligence Terminal.
 
 ---
 
+## Prerequisites (one-time setup)
+
+### API keys
+
+Copy `.env.example` to `.env` and fill in:
+
+| Variable | Where to get it |
+|---|---|
+| `EIA_API_KEY` | https://www.eia.gov/opendata/ |
+| `FRED_API_KEY` | https://fred.stlouisfed.org/docs/api/api_key.html |
+| `AISSTREAM_API_KEY` | https://aisstream.io (free, no AIS receiver required) |
+| `INTERNAL_API_KEY` | Any random string — used to authenticate Python → Go SSE notify |
+
+### Python dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### Node.js (frontend)
+
+Must be **64-bit**. Verify with:
+```powershell
+node -e "console.log(process.arch)"   # must print: x64
+```
+If it prints `ia32`, uninstall and reinstall the x64 build from https://nodejs.org.
+
+### Go / CGO (Windows)
+
+The API uses DuckDB via CGO and requires a C compiler. Install [MinGW-w64](https://github.com/niXman/mingw-builds-binaries/releases) and set the path before building:
+
+```powershell
+$env:PATH = "C:\mingw64\mingw64\bin;$env:PATH"
+$env:CGO_ENABLED = "1"
+```
+
+### Bootstrap the database (first time only)
+
+```bash
+python -m scripts.bootstrap
+```
+
+---
+
+## Full startup (4 terminals, in order)
+
+Start in this order so the API is ready before the scheduler tries to notify it.
+
+**Terminal 1 — Go API**
+```powershell
+cd api
+$env:PATH = "C:\mingw64\mingw64\bin;$env:PATH"
+$env:CGO_ENABLED = "1"
+.\api.exe           # rebuild first if code changed: go build -o api.exe .
+```
+API available at http://localhost:8080
+
+**Terminal 2 — Go AIS collector** (optional — provides live vessel data to LNG panel)
+```powershell
+cd api
+$env:PATH = "C:\mingw64\mingw64\bin;$env:PATH"
+.\ais.exe           # rebuild if needed: go build -o ais.exe ./cmd/ais
+```
+
+**Terminal 3 — Python scheduler**
+```powershell
+python -m scheduler.jobs
+```
+
+**Terminal 4 — Frontend**
+```powershell
+cd ui
+npm run dev
+```
+UI available at http://localhost:3000
+
+> If port 8080 is already in use (previous api.exe still running):
+> ```powershell
+> Stop-Process -Name api -Force -ErrorAction SilentlyContinue
+> ```
+
+---
+
+## Building Go binaries (Windows)
+
+Required after any code change to `api/` or `api/cmd/ais/`.
+
+```powershell
+cd api
+$env:PATH = "C:\mingw64\mingw64\bin;$env:PATH"
+$env:CGO_ENABLED = "1"
+go build -o api.exe .
+go build -o ais.exe ./cmd/ais
+```
+
+---
+
+## Starting the Frontend (UI)
+
+```powershell
+cd ui
+npm install   # first time, or after package.json changes
+npm run dev   # uses Turbopack (next dev --turbo)
+```
+
+The dev script uses `--turbo` (Rust-based Turbopack bundler). Do **not** remove this flag — the webpack bundler OOMs on systems with less than ~4 GB free RAM.
+
+If the UI fails to start with a crash or stale cache error:
+```powershell
+Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue
+npm run dev
+```
+
+---
+
 ## Starting the Python Scheduler
 
 ```bash
@@ -40,6 +155,22 @@ DB_PATH=../data/db/terminal.duckdb INTERNAL_API_KEY=... ./terminal-api
 ```
 
 The API opens DuckDB in `READ_ONLY` mode and never blocks the Python writer. Set `INTERNAL_API_KEY` in production — without it, any process that can reach the server can trigger SSE broadcasts.
+
+---
+
+## Starting the AIS Collector
+
+The AIS collector is a standalone Go binary that maintains a persistent WebSocket connection to AISstream.io and writes vessel positions to the `ais_vessels` table every 5 minutes.
+
+```powershell
+cd api
+$env:PATH = "C:\mingw64\mingw64\bin;$env:PATH"
+.\ais.exe
+```
+
+The LNG panel functions without it — it falls back to EIA monthly export data. Run the AIS collector to get live vessel counts, dwell times, queue depth, and EU destination tracking.
+
+The binary requires `AISSTREAM_API_KEY` in `.env`. It opens DuckDB read-write for brief ~10ms windows every 5 minutes, then closes immediately to avoid blocking the API's read-only connection.
 
 ---
 

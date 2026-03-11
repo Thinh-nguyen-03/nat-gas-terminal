@@ -144,7 +144,7 @@ Below the table: a 52-week chart showing the model's implied weekly injection/wi
 ---
 
 ## Feature 2 — AIS LNG Vessel Tracking → Export Prediction
-> **Status: ✅ Implemented** (`collectors/lng_vessels.py`, `transforms/features_lng.py`). AISHub free-tier polling every 30 min; bounding box covers all 7 terminals in one request. Set `AIS_HUB_USERNAME` in `.env` to activate. Data flows to `GET /api/lng`.
+> **Status: ✅ Implemented** (`api/cmd/ais/main.go`, `transforms/features_lng.py`). AISstream.io WebSocket — persistent connection, processes data in real-time, writes terminal counts every 5 min. Set `AISSTREAM_API_KEY` in `.env` and run `go run ./cmd/ais` alongside the API server. Data flows to `GET /api/lng`.
 
 ### What it is
 
@@ -182,10 +182,7 @@ The most impactful signal is when Freeport, Sabine Pass, or Corpus Christi goes 
 | Elba Island | Savannah, GA | 0.35 | 31.98°N, 81.08°W |
 
 **AIS data sources:**
-- **AISHub** (`https://www.aishub.net/api`) — free tier allows 100 requests/hour, returns vessels within a bounding box
-- **VesselFinder** — free tier, limited to vessel lookups
-- **MarineTraffic** — free tier with rate limits; paid tier has bulk access
-- **AIS decoder libraries** — `pyais` Python package can decode raw NMEA sentences from AIS receivers
+- **AISstream.io** (`wss://stream.aisstream.io/v0/stream`) — free tier WebSocket stream; no AIS receiver required; sign up at aisstream.io
 
 The collector queries a bounding box around each terminal every 30 minutes. Any vessel with MMSI identifying it as an LNG tanker (vessel type 84 in AIS = liquefied gas tanker) that is stationary at a berth is classified as loading.
 
