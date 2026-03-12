@@ -113,6 +113,7 @@ def step_transforms() -> None:
     from transforms.features_fairvalue    import compute_fairvalue_features
     from transforms.features_summary      import save_summary
     from transforms.features_analog       import compute_analog_features
+    from transforms.market_brief          import compute_market_brief
 
     transforms = [
         ("feat_price",        compute_price_features),
@@ -126,6 +127,7 @@ def step_transforms() -> None:
         ("feat_fairvalue",    compute_fairvalue_features),
         ("summary",           save_summary),
         ("feat_analog",       compute_analog_features),
+        ("market_brief",      compute_market_brief),
     ]
 
     for name, fn in transforms:

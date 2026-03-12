@@ -88,6 +88,7 @@ func main() {
 	mux.HandleFunc("GET /api/lng/vessels", h.LNGVessels)
 	mux.HandleFunc("GET /api/power",       h.Power)
 	mux.HandleFunc("GET /api/news",        h.News)
+	mux.HandleFunc("GET /api/brief",       h.Brief)
 
 	// Internal endpoints — not exposed publicly.
 	mux.HandleFunc("POST /internal/notify", h.Notify)

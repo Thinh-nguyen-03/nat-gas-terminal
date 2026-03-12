@@ -35,6 +35,7 @@ from transforms.features_cpc     import compute_cpc_features
 from transforms.features_price   import compute_price_features
 from transforms.features_storage import compute_storage_features
 from transforms.features_summary import save_summary
+from transforms.market_brief     import compute_market_brief
 from transforms.features_weather import compute_weather_features
 from config.settings import LOG_PATH, NOTIFY_API_URL, INTERNAL_API_KEY
 
@@ -281,6 +282,15 @@ def _build_scheduler() -> BlockingScheduler:
         CronTrigger(minute=40),
         id="feat_fairvalue",
         name="Fair value price model (lookup table / OLS)",
+    )
+
+    # Market Brief: Gemini synthesis of all signals — runs after fairvalue at :45
+    # No-op when GEMINI_API_KEY is not set.
+    scheduler.add_job(
+        _notify_after(compute_market_brief, "market_brief"),
+        CronTrigger(minute=45),
+        id="market_brief",
+        name="Market Brief (Gemini multi-signal synthesis)",
     )
 
     return scheduler
