@@ -289,6 +289,22 @@ export interface AnalogsResponse {
   analogs: Analog[]
 }
 
+// /api/news
+export interface NewsItem {
+  id: string
+  source: string
+  title: string
+  url: string | null
+  published_at: string | null
+  score: number
+  sentiment: 'bullish' | 'bearish' | 'neutral'
+  tags: string[]
+}
+export interface NewsResponse {
+  items: NewsItem[]
+  as_of: string
+}
+
 // /api/health
 export interface CollectorStatus {
   source_name: string

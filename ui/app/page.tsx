@@ -8,6 +8,7 @@ import { PowerPanel } from '@/components/panels/PowerPanel'
 import { CalendarPanel } from '@/components/panels/CalendarPanel'
 import { AnalogsPanel } from '@/components/panels/AnalogsPanel'
 import { BalancePanel } from '@/components/panels/BalancePanel'
+import { NewsPanel } from '@/components/panels/NewsPanel'
 import { StatusBar } from '@/components/StatusBar'
 
 export default function DashboardPage() {
@@ -75,21 +76,13 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Row 4: Calendar (5) + [News/Signals placeholder] (7) */}
+        {/* Row 4: Calendar (5) + News Wire (7) */}
         <div className="grid grid-cols-12 gap-3" style={{ minHeight: 280 }}>
           <div className="col-span-5 h-full">
             <CalendarPanel />
           </div>
-          <div
-            className="col-span-7 h-full flex items-center justify-center"
-            style={{ border: '1px dashed #1e2433' }}
-          >
-            <span
-              className="text-xs tracking-widest"
-              style={{ fontFamily: 'JetBrains Mono, monospace', color: '#334155' }}
-            >
-              SIGNALS FEED — COMING SOON
-            </span>
+          <div className="col-span-7 h-full">
+            <NewsPanel />
           </div>
         </div>
 
