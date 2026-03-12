@@ -305,6 +305,20 @@ export interface NewsResponse {
   as_of: string
 }
 
+// /api/brief
+export interface BriefContent {
+  outlook: string
+  drivers: string[]
+  risk: string
+  model: string
+  generated_at: string
+}
+export interface BriefResponse {
+  date: string
+  content: BriefContent
+  as_of: string
+}
+
 // /api/health
 export interface CollectorStatus {
   source_name: string

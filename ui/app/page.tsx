@@ -9,6 +9,7 @@ import { CalendarPanel } from '@/components/panels/CalendarPanel'
 import { AnalogsPanel } from '@/components/panels/AnalogsPanel'
 import { BalancePanel } from '@/components/panels/BalancePanel'
 import { NewsPanel } from '@/components/panels/NewsPanel'
+import { BriefPanel } from '@/components/panels/BriefPanel'
 import { StatusBar } from '@/components/StatusBar'
 
 export default function DashboardPage() {
@@ -93,6 +94,13 @@ export default function DashboardPage() {
           </div>
           <div className="col-span-6 h-full">
             <AnalogsPanel />
+          </div>
+        </div>
+
+        {/* Row 6: Market Brief (12) — full-width Gemini synthesis */}
+        <div className="grid grid-cols-12 gap-3" style={{ minHeight: 160 }}>
+          <div className="col-span-12 h-full">
+            <BriefPanel />
           </div>
         </div>
       </div>
