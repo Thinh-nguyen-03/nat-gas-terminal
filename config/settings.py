@@ -8,7 +8,7 @@ FRED_API_KEY     = os.environ["FRED_API_KEY"]
 AISSTREAM_API_KEY      = os.environ.get("AISSTREAM_API_KEY", "")
 
 GEMINI_API_KEY         = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL           = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+GEMINI_MODEL           = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
 
 NOAA_CDO_TOKEN         = os.environ.get("NOAA_CDO_TOKEN", "")
 PJM_API_KEY            = os.environ.get("PJM_API_KEY", "")

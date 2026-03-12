@@ -17,7 +17,7 @@ fredapi==0.5.2
 pyshp==3.0.3
 
 # AI
-google-generativeai>=0.7.0
+google-genai>=1.0
 
 # Scheduler
 apscheduler==3.10.4

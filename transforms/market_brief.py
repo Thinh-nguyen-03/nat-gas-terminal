@@ -131,19 +131,13 @@ def compute_market_brief() -> None:
         return
 
     try:
-        import google.generativeai as genai
+        from google import genai
+        from google.genai import types as genai_types
     except ImportError:
-        logger.error("[market_brief] google-generativeai not installed — run: pip install google-generativeai")
+        logger.error("[market_brief] google-genai not installed — run: pip install google-genai")
         return
 
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel(
-        GEMINI_MODEL,
-        generation_config=genai.GenerationConfig(
-            response_mime_type="application/json",
-            temperature=0.3,
-        ),
-    )
+    client = genai.Client(api_key=GEMINI_API_KEY)
 
     conn = duckdb.connect(DB_PATH)
     today = date.today()
@@ -151,7 +145,14 @@ def compute_market_brief() -> None:
 
     try:
         prompt = _build_prompt(conn, today)
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=genai_types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.3,
+            ),
+        )
 
         parsed = json.loads(response.text)
         content = json.dumps({

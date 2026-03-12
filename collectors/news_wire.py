@@ -32,9 +32,16 @@ logger = logging.getLogger("collectors")
 # ---------------------------------------------------------------------------
 
 _FEEDS: list[tuple[str, str]] = [
-    ("EIA",  "https://www.eia.gov/rss/todayinenergy.xml"),
-    ("FERC", "https://www.ferc.gov/rss/news.xml"),
+    # EIA Today in Energy — confirmed public RSS, updated daily
+    ("EIA", "https://www.eia.gov/rss/todayinenergy.xml"),
 ]
+
+# Browser-like UA is required by some government feeds (e.g. FERC)
+_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0.0.0 Safari/537.36"
+)
 
 # ---------------------------------------------------------------------------
 # Keyword scoring table: (keyword, weight, direction)
@@ -203,7 +210,7 @@ class NewsWireCollector(CollectorBase):
                 try:
                     resp = requests.get(
                         url, timeout=20,
-                        headers={"User-Agent": "NGTerminal/1.0"},
+                        headers={"User-Agent": _UA},
                     )
                     resp.raise_for_status()
                     rows = _parse_feed(source, resp.text)
