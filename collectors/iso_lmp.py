@@ -99,15 +99,29 @@ def _fetch_nyiso(now: datetime) -> tuple[str, float, str] | None:
     resp = requests.get(url, timeout=30)
     resp.raise_for_status()
 
-    # CSV columns: Time Stamp, Name, PTID, Integrated Real-Time LMP, ...
+    # CSV columns vary across NYISO schema versions; try known variants.
     lines = resp.text.strip().splitlines()
     if len(lines) < 2:
         return None
 
     header = [h.strip() for h in lines[0].split(",")]
-    name_idx = header.index("Name")
-    lmp_idx  = header.index("Integrated Real-Time LMP")
-    ts_idx   = header.index("Time Stamp")
+
+    def _col(*candidates: str) -> int | None:
+        for c in candidates:
+            if c in header:
+                return header.index(c)
+        return None
+
+    name_idx = _col("Name")
+    ts_idx   = _col("Time Stamp")
+    lmp_idx  = _col("Integrated Real-Time LMP", "LBMP ($/MWHr)", "LMP")
+
+    if any(x is None for x in (name_idx, ts_idx, lmp_idx)):
+        logger.warning("[iso_lmp] NYISO unexpected CSV headers: %s", header[:8])
+        return None
+
+    # Zone J (NYC) label — NYISO uses "N.Y.C." but has used "NYC" in some exports
+    _NYC_NAMES = {"N.Y.C.", "NYC", "N.Y.C", "NEW YORK CITY"}
 
     # Find the last Zone J row (newest first isn't guaranteed — scan all)
     best_ts = None
@@ -116,7 +130,7 @@ def _fetch_nyiso(now: datetime) -> tuple[str, float, str] | None:
         parts = line.split(",")
         if len(parts) <= max(name_idx, lmp_idx, ts_idx):
             continue
-        if parts[name_idx].strip() != "N.Y.C.":
+        if parts[name_idx].strip().upper() not in _NYC_NAMES and parts[name_idx].strip() not in _NYC_NAMES:
             continue
         try:
             lmp = float(parts[lmp_idx].strip())
@@ -139,34 +153,53 @@ def _fetch_nyiso(now: datetime) -> tuple[str, float, str] | None:
 
 def _fetch_miso(now: datetime) -> tuple[str, float, str] | None:
     """
-    MISO BI Reporter real-time LMP (Illinois Hub, no registration required).
-    Endpoint returns JSON with hub-level LMP values.
+    MISO real-time LMP (Illinois Hub, no registration required).
+    Tries multiple known endpoints in order — MISO has changed API paths over time.
     """
-    url = (
-        "https://api.misoenergy.org/MISORTWDBIReporter/services/"
-        "MISORTWDDataBroker/getLMPConsolidatedTable"
-    )
-    params = {"colType": "LMPZ", "requestType": "getLatestData"}
-    resp = requests.get(url, params=params, timeout=30,
-                        headers={"Accept": "application/json"})
-    resp.raise_for_status()
-    data = resp.json()
+    _MISO_URLS = [
+        # Primary BI Reporter endpoint
+        (
+            "https://api.misoenergy.org/MISORTWDBIReporter/services/"
+            "MISORTWDDataBroker/getLMPConsolidatedTable",
+            {"colType": "LMPZ", "requestType": "getLatestData"},
+        ),
+        # Alternative BI Reporter path observed after 2025 migration
+        (
+            "https://api.misoenergy.org/MISORTWDBIReporter/services/"
+            "MISORTWDDataBroker/getRealtimeBusLMP",
+            {"colType": "LMPZ", "requestType": "getLatestData"},
+        ),
+    ]
 
-    # Response: {"LMPData": {"Data": [{"name": "ILLINOIS HUB", "lmp": "25.34", ...}, ...]}}
-    rows = (
-        data.get("LMPData", {}).get("Data", [])
-        or data.get("lmpData", {}).get("data", [])
-    )
-    for row in rows:
-        name = (row.get("name") or row.get("Name") or "").upper()
-        if "ILLINOIS" not in name:
-            continue
+    for url, params in _MISO_URLS:
         try:
-            lmp = float(str(row.get("lmp") or row.get("LMP") or "").replace(",", ""))
-        except (ValueError, TypeError):
+            resp = requests.get(
+                url, params=params, timeout=30,
+                headers={"Accept": "application/json", "User-Agent": "NGTerminal/1.0"},
+            )
+            if resp.status_code == 404:
+                logger.debug("[iso_lmp] MISO 404 on %s, trying next", url)
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e:
+            logger.debug("[iso_lmp] MISO attempt failed (%s): %s", url, e)
             continue
-        obs_time = now.strftime("%Y-%m-%dT%H:00:00Z")
-        return ("MISO", lmp, obs_time)
+
+        rows = (
+            data.get("LMPData", {}).get("Data", [])
+            or data.get("lmpData", {}).get("data", [])
+        )
+        for row in rows:
+            name = (row.get("name") or row.get("Name") or "").upper()
+            if "ILLINOIS" not in name:
+                continue
+            try:
+                lmp = float(str(row.get("lmp") or row.get("LMP") or "").replace(",", ""))
+            except (ValueError, TypeError):
+                continue
+            obs_time = now.strftime("%Y-%m-%dT%H:00:00Z")
+            return ("MISO", lmp, obs_time)
 
     return None
 
