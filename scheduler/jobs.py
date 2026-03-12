@@ -16,6 +16,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from collectors.catalyst_calendar import CatalystCalendarCollector
 from collectors.iso_lmp            import ISOLMPCollector
+from collectors.news_wire          import NewsWireCollector
 from collectors.cftc              import CFTCCollector
 from collectors.cpc_outlook       import CPCOutlookCollector
 from collectors.eia_storage       import EIAStorageCollector
@@ -194,6 +195,15 @@ def _build_scheduler() -> BlockingScheduler:
         CronTrigger(minute=10),
         id="iso_lmp",
         name="ISO LMP hub prices (NYISO, MISO, CAISO)",
+        misfire_grace_time=300,
+    )
+
+    # News Wire: every 15 minutes (EIA, FERC RSS feeds — free public)
+    scheduler.add_job(
+        NewsWireCollector().run,
+        CronTrigger(minute="2,17,32,47"),
+        id="news_wire",
+        name="News Wire (EIA / FERC RSS feeds)",
         misfire_grace_time=300,
     )
 

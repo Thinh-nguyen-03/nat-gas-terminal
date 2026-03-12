@@ -183,6 +183,23 @@ def initialize_schema():
         )
         """,
 
+        # News wire — scored RSS headlines for nat-gas relevant events.
+        # Written by collectors/news_wire.py every 15 minutes.
+        # id = sha1(url)[:16]; tags = comma-separated matched keywords.
+        """
+        CREATE TABLE IF NOT EXISTS news_items (
+            id           VARCHAR PRIMARY KEY,
+            source       VARCHAR NOT NULL,
+            title        VARCHAR NOT NULL,
+            url          VARCHAR,
+            published_at TIMESTAMPTZ,
+            fetched_at   TIMESTAMPTZ NOT NULL,
+            score        FLOAT NOT NULL DEFAULT 0,
+            sentiment    VARCHAR NOT NULL DEFAULT 'neutral',
+            tags         VARCHAR
+        )
+        """,
+
         # Pipeline events — OFOs, capacity constraints, maintenance windows.
         # Written by collectors/pipeline_ebb.py (Feature 1 Phase 3).
         # Also supports manual entry for known terminal maintenance.

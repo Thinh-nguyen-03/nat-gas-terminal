@@ -78,6 +78,7 @@ def step_live_collectors() -> None:
         # cmd/ais binary which runs as a persistent process alongside the API.
         ("ISOLMPCollector",           "collectors.iso_lmp",           "ISOLMPCollector"),
         ("CatalystCalendarCollector", "collectors.catalyst_calendar", "CatalystCalendarCollector"),
+        ("NewsWireCollector",         "collectors.news_wire",         "NewsWireCollector"),
         ("PriceCollector",            "collectors.price",             "PriceCollector"),
     ]
 
