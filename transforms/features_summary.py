@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import duckdb
 
-from config.settings import DB_PATH
+from config.settings import DB_PATH, connect_db
 
 logger = logging.getLogger("collectors")
 
@@ -62,7 +62,7 @@ def compute_what_changed() -> list[dict]:
     Compare today's features against yesterday's. Return a list of changes
     sorted so the most significant appear first.
     """
-    conn = duckdb.connect(DB_PATH)
+    conn = connect_db()
     today = date.today()
     yesterday = today - timedelta(days=1)
     changes: list[dict] = []
@@ -122,7 +122,7 @@ def compute_fundamental_score() -> dict:
     Each component is clamped to its weight before summing.
     Returns the score, a label, and the top driver bullets.
     """
-    conn = duckdb.connect(DB_PATH)
+    conn = connect_db()
     today = date.today()
     score = 0.0
     drivers: list[str] = []
@@ -146,7 +146,7 @@ def save_summary() -> None:
     today = date.today()
     now   = datetime.now(timezone.utc).isoformat()
 
-    conn = duckdb.connect(DB_PATH)
+    conn = connect_db()
     try:
         for summary_type, payload in [
             ("fundamental_score", score_data),

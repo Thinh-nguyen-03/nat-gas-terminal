@@ -20,7 +20,7 @@ from datetime import date, datetime, timezone
 
 import duckdb
 
-from config.settings import DB_PATH
+from config.settings import DB_PATH, connect_db
 
 logger = logging.getLogger("collectors")
 
@@ -47,7 +47,7 @@ EXCLUDE_RECENT_DAYS = 30
 
 
 def compute_analog_features() -> None:
-    conn = duckdb.connect(DB_PATH)
+    conn = connect_db()
     today = date.today()
     now = datetime.now(timezone.utc).isoformat()
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import duckdb
 
-from config.settings import DB_PATH
+from config.settings import DB_PATH, connect_db
 
 logger = logging.getLogger("transforms")
 
@@ -29,7 +29,7 @@ _UPSERT_SQL = """
 
 
 def compute_fairvalue_features() -> None:
-    conn = duckdb.connect(DB_PATH)
+    conn = connect_db()
     today = date.today()
     now = datetime.now(timezone.utc).isoformat()
     try:
@@ -54,9 +54,6 @@ def _run(conn, today: date, now: str) -> None:
         _run_lookup(conn, today, now, current_deficit, current_price, season)
 
 
-# ---------------------------------------------------------------------------
-# OLS mode
-# ---------------------------------------------------------------------------
 
 def _run_ols(conn, today, now, deficit, price, season, coeffs):
     intercept = coeffs["intercept"]
@@ -89,9 +86,6 @@ def _run_ols(conn, today, now, deficit, price, season, coeffs):
     )
 
 
-# ---------------------------------------------------------------------------
-# Lookup table mode
-# ---------------------------------------------------------------------------
 
 def _run_lookup(conn, today, now, deficit, price, season):
     history = _build_history(conn)
@@ -133,9 +127,6 @@ def _run_lookup(conn, today, now, deficit, price, season):
     )
 
 
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
 
 def _write_features(conn, today, now, fv_mid, fv_low, fv_high, gap, interp, confidence):
     for name, value in (

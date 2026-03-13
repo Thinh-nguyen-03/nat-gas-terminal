@@ -17,7 +17,7 @@ from datetime import date, datetime, timezone
 
 import duckdb
 
-from config.settings import DB_PATH, GEMINI_API_KEY, GEMINI_MODEL
+from config.settings import DB_PATH, GEMINI_API_KEY, GEMINI_MODEL, connect_db
 
 logger = logging.getLogger("collectors")
 
@@ -31,9 +31,6 @@ _UPSERT_SQL = """
 """
 
 
-# ---------------------------------------------------------------------------
-# DB helpers
-# ---------------------------------------------------------------------------
 
 def _get_feature(name: str, conn, days_back: int = 7) -> float | None:
     row = conn.execute("""
@@ -63,15 +60,12 @@ def _get_score(conn) -> tuple[float | None, str]:
 def _get_recent_news(conn, n: int = 5) -> list[str]:
     rows = conn.execute("""
         SELECT title, sentiment FROM news_items
-        WHERE fetched_at >= NOW() - INTERVAL '24 hours'
+        WHERE fetched_at >= NOW()::TIMESTAMP - INTERVAL '24 hours'
         ORDER BY score DESC LIMIT ?
     """, [n]).fetchall()
     return [f"[{r[1].upper()}] {r[0]}" for r in rows]
 
 
-# ---------------------------------------------------------------------------
-# Prompt
-# ---------------------------------------------------------------------------
 
 def _fmt(v: float | None, unit: str = "", precision: int = 1) -> str:
     return f"{v:.{precision}f}{unit}" if v is not None else "N/A"
@@ -120,9 +114,6 @@ Write a structured market brief. Respond with a JSON object containing exactly t
 - "risk": one sentence on the main tail risk that could flip the outlook"""
 
 
-# ---------------------------------------------------------------------------
-# Main transform
-# ---------------------------------------------------------------------------
 
 def compute_market_brief() -> None:
     """Generate a Gemini-powered market brief and store it in summary_outputs."""
@@ -139,7 +130,7 @@ def compute_market_brief() -> None:
 
     client = genai.Client(api_key=GEMINI_API_KEY)
 
-    conn = duckdb.connect(DB_PATH)
+    conn = connect_db()
     today = date.today()
     now = datetime.now(timezone.utc).isoformat()
 

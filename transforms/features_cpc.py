@@ -4,7 +4,7 @@ from datetime import date, datetime, timezone
 import duckdb
 
 from collectors.weather import WEATHER_POINTS
-from config.settings import DB_PATH
+from config.settings import DB_PATH, connect_db
 
 logger = logging.getLogger("collectors")
 
@@ -27,7 +27,7 @@ _UPSERT_SQL = """
 
 
 def compute_cpc_features() -> None:
-    conn = duckdb.connect(DB_PATH)
+    conn = connect_db()
     today = date.today()
     now = datetime.now(timezone.utc).isoformat()
 

@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 import duckdb
 
 from collectors.weather import WEATHER_POINTS
-from config.settings import ARCHIVE_DIR, DB_PATH
+from config.settings import ARCHIVE_DIR, DB_PATH, connect_db
 from transforms.demand_coefficients import estimate_demand, seasonal_normal_demand
 
 logger = logging.getLogger("collectors")
@@ -35,7 +35,7 @@ _UPSERT_SQL = """
 
 
 def compute_weather_features() -> None:
-    conn = duckdb.connect(DB_PATH)
+    conn = connect_db()
     today = date.today()
     now = datetime.now(timezone.utc).isoformat()
 

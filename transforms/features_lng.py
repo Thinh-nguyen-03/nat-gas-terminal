@@ -27,7 +27,7 @@ from datetime import date, datetime, timezone, timedelta
 
 import duckdb
 
-from config.settings import DB_PATH
+from config.settings import DB_PATH, connect_db
 
 # Path where the Go API server writes the latest AIS snapshot.
 # Layout: data/db/terminal.duckdb → data/ais_snapshot.json
@@ -84,7 +84,7 @@ _UPSERT_SQL_LOW = """
 
 
 def compute_lng_features() -> None:
-    conn = duckdb.connect(DB_PATH)
+    conn = connect_db()
     today = date.today()
     now_str = datetime.now(timezone.utc).isoformat()
 
@@ -287,9 +287,6 @@ def backfill_lng_from_eia() -> None:
         conn.close()
 
 
-# ---------------------------------------------------------------------------
-# Signal computation helpers
-# ---------------------------------------------------------------------------
 
 def _compute_epi(implied_bcfd: float, total_anchored: int) -> float:
     """Export Pressure Index (0–100).
