@@ -34,8 +34,7 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
       esRef.current.close()
     }
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
-    const es = new EventSource(`${apiUrl}/api/stream`)
+    const es = new EventSource('/api/stream')
     esRef.current = es
 
     es.addEventListener('collection_complete', (e: MessageEvent) => {

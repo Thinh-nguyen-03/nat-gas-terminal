@@ -56,7 +56,6 @@ export function StoragePanel() {
       error={error}
     >
       <div className="flex flex-col h-full p-3 gap-2">
-        {/* Headline */}
         <div className="flex items-start justify-between gap-2">
           <div>
             <div className="flex items-baseline gap-2">
@@ -78,7 +77,7 @@ export function StoragePanel() {
                 {surplusSign}{fmt(surplus, 0, ' BCF')} vs 5yr avg
               </div>
             )}
-            <div className="text-xs mt-1" style={{ color: '#94a3b8' }}>
+            <div className="mono text-xs mt-1" style={{ color: '#94a3b8' }}>
               Week ending: {data?.latest_week_ending ?? '—'}
             </div>
           </div>
@@ -87,7 +86,6 @@ export function StoragePanel() {
           )}
         </div>
 
-        {/* Consensus */}
         {data?.consensus && (
           <div
             className="text-xs flex gap-4"
@@ -106,21 +104,20 @@ export function StoragePanel() {
             </span>
             <span>
               Model:{' '}
-              <span style={{ color: '#22d3ee' }}>
+              <span style={{ color: '#38bdf8' }}>
                 {fmt(data.consensus.model_estimate_bcf, 0, ' BCF')}
               </span>
             </span>
           </div>
         )}
 
-        {/* Chart */}
         <div className="flex-1 min-h-0" style={{ minHeight: 100 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+            <ComposedChart data={chartData} margin={{ top: 4, right: 0, left: 4, bottom: 0 }}>
               <defs>
                 <linearGradient id="storageGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#22d3ee" stopOpacity={0.02} />
+                  <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#38bdf8" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               <XAxis
@@ -138,42 +135,60 @@ export function StoragePanel() {
                 tickFormatter={(v: number) => v === 0 ? '0' : `${(v / 1000).toFixed(1)}k`}
               />
               <Tooltip
-                contentStyle={{
-                  backgroundColor: '#141720',
-                  border: '1px solid #1e2433',
-                  borderRadius: 0,
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: 11,
-                  color: '#e2e8f0',
-                }}
-                formatter={(value: number, name: string) => {
-                  const labels: Record<string, string> = {
-                    total: 'Storage',
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null
+                  const colors: Record<string, string> = {
+                    total:  '#38bdf8',
+                    avg5yr: '#94a3b8',
+                    max5yr: '#f59e0b',
+                    min5yr: '#f87171',
+                  }
+                  const names: Record<string, string> = {
+                    total:  'Storage',
                     avg5yr: '5yr Avg',
                     max5yr: '5yr Max',
                     min5yr: '5yr Min',
                   }
-                  return [fmt(value, 0, ' BCF'), labels[name] ?? name]
+                  return (
+                    <div style={{
+                      backgroundColor: '#141720',
+                      border: '1px solid #1e2433',
+                      padding: '6px 8px',
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 11,
+                    }}>
+                      <div style={{ color: '#e2e8f0', marginBottom: 4 }}>{label}</div>
+                      {payload.map((p) => p.value != null && (
+                        <div key={p.dataKey as string} style={{ color: colors[p.dataKey as string] ?? '#e2e8f0' }}>
+                          {names[p.dataKey as string] ?? p.dataKey}: {fmt(p.value as number, 0, ' BCF')}
+                        </div>
+                      ))}
+                    </div>
+                  )
                 }}
               />
-              {/* 5yr band */}
+              {/* 5yr band + thin min/max lines */}
               <Area
                 type="monotone"
                 dataKey="max5yr"
-                stroke="none"
+                stroke="#f59e0b"
+                strokeWidth={0.75}
+                strokeOpacity={0.45}
+                strokeDasharray="2 4"
                 fill="#1a1f2e"
                 fillOpacity={1}
                 dot={false}
-                legendType="none"
               />
               <Area
                 type="monotone"
                 dataKey="min5yr"
-                stroke="none"
+                stroke="#f87171"
+                strokeWidth={0.75}
+                strokeOpacity={0.45}
+                strokeDasharray="2 4"
                 fill="#141720"
                 fillOpacity={1}
                 dot={false}
-                legendType="none"
               />
               {/* 5yr avg */}
               <Area
@@ -189,11 +204,11 @@ export function StoragePanel() {
               <Area
                 type="monotone"
                 dataKey="total"
-                stroke="#22d3ee"
+                stroke="#38bdf8"
                 strokeWidth={1.5}
                 fill="url(#storageGrad)"
                 dot={false}
-                activeDot={{ r: 3, fill: '#22d3ee' }}
+                activeDot={{ r: 3, fill: '#38bdf8' }}
               />
             </ComposedChart>
           </ResponsiveContainer>

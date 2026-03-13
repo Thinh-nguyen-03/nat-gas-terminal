@@ -99,7 +99,6 @@ export function ScorePanel() {
       error={error}
     >
       <div className="flex flex-col h-full p-3 gap-2">
-        {/* Headline */}
         <div className="flex items-baseline justify-between gap-3">
           <div className="flex items-baseline gap-3">
             <span
@@ -118,7 +117,6 @@ export function ScorePanel() {
           </span>
         </div>
 
-        {/* What Changed */}
         {whatChanged.length > 0 && (
           <div
             className="text-xs shrink-0"
@@ -160,7 +158,6 @@ export function ScorePanel() {
           </div>
         )}
 
-        {/* Drivers */}
         {data?.drivers && data.drivers.length > 0 && (
           <div
             className="text-xs shrink-0"
@@ -175,22 +172,21 @@ export function ScorePanel() {
             <ul className="flex flex-col gap-0.5">
               {data.drivers.slice(0, 4).map((d, i) => (
                 <li key={i} className="flex gap-1.5 items-start" style={{ color: '#94a3b8' }}>
-                  <span style={{ color: '#22d3ee', flexShrink: 0 }}>›</span>
-                  <span style={{ fontFamily: 'Inter, sans-serif' }}>{d}</span>
+                  <span style={{ color: '#34d399', flexShrink: 0 }}>›</span>
+                  <span className="mono">{d}</span>
                 </li>
               ))}
             </ul>
           </div>
         )}
 
-        {/* Chart */}
         <div className="flex-1 min-h-0" style={{ minHeight: 80, maxHeight: 140 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 4, right: 0, left: -20, bottom: 0 }}>
+            <AreaChart data={chartData} margin={{ top: 4, right: 0, left: 4, bottom: 0 }}>
               <defs>
                 <linearGradient id="scoreGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#22d3ee" stopOpacity={0.02} />
+                  <stop offset="5%" stopColor="#34d399" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#34d399" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               <XAxis
@@ -215,17 +211,19 @@ export function ScorePanel() {
                   fontSize: 11,
                   color: '#e2e8f0',
                 }}
+                labelStyle={{ color: '#e2e8f0' }}
+                itemStyle={{ color: '#e2e8f0' }}
                 formatter={(value: number) => [fmt(value, 1), 'Score']}
               />
               <ReferenceLine y={0} stroke="#1e2433" strokeDasharray="3 3" />
               <Area
                 type="monotone"
                 dataKey="score"
-                stroke="#22d3ee"
+                stroke="#34d399"
                 strokeWidth={1.5}
                 fill="url(#scoreGrad)"
                 dot={false}
-                activeDot={{ r: 3, fill: '#22d3ee' }}
+                activeDot={{ r: 3, fill: '#34d399' }}
               />
             </AreaChart>
           </ResponsiveContainer>

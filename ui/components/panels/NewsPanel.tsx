@@ -10,7 +10,7 @@ const SSE_SOURCES = ['news_wire']
 function sentimentColor(s: string): string {
   if (s === 'bullish') return '#4ade80'
   if (s === 'bearish') return '#f87171'
-  return '#475569'
+  return '#64748b'
 }
 
 function sentimentLabel(s: string): string {
@@ -45,7 +45,7 @@ export function NewsPanel() {
   return (
     <PanelShell
       title="NEWS WIRE"
-      source="EIA / FERC"
+      source="EIA / RSS / AI"
       updatedAt={updatedAt}
       flash={flash}
       loading={loading}
@@ -55,7 +55,7 @@ export function NewsPanel() {
         {allItems.length === 0 && !loading && !error && (
           <div
             className="text-xs"
-            style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}
+            style={{ color: '#94a3b8', fontFamily: 'JetBrains Mono, monospace' }}
           >
             NO RECENT HEADLINES
           </div>
@@ -86,7 +86,6 @@ function NewsItemRow({ item }: { item: NewsItem }) {
         borderLeftColor: color,
       }}
     >
-      {/* Title row */}
       <div
         className="text-xs leading-snug"
         style={{
@@ -101,17 +100,34 @@ function NewsItemRow({ item }: { item: NewsItem }) {
         {item.title}
       </div>
 
-      {/* Meta row */}
+      {/* AI implication */}
+      {item.implication && (
+        <div
+          className="text-xs leading-snug"
+          style={{
+            color: sentimentColor(item.sentiment),
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: 10,
+            fontStyle: 'italic',
+            opacity: 0.85,
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+          }}
+        >
+          {item.implication}
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
-          {/* Sentiment indicator */}
           <span
             className="text-xs font-bold"
             style={{ color, fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}
           >
             {sentimentLabel(item.sentiment)}
           </span>
-          {/* Source tag */}
           <span
             className="text-xs px-1"
             style={{
@@ -127,24 +143,22 @@ function NewsItemRow({ item }: { item: NewsItem }) {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Relevance score */}
           {item.score >= 10 && (
             <span
               className="num text-xs"
               style={{
                 fontFamily: 'JetBrains Mono, monospace',
                 fontSize: 9,
-                color: item.score >= 30 ? '#fbbf24' : '#475569',
+                color: item.score >= 30 ? '#fbbf24' : '#64748b',
               }}
             >
               {Math.round(item.score)}
             </span>
           )}
-          {/* Age */}
           {age && (
             <span
               className="num text-xs"
-              style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#475569' }}
+              style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#64748b' }}
             >
               {age}
             </span>
@@ -154,7 +168,6 @@ function NewsItemRow({ item }: { item: NewsItem }) {
     </div>
   )
 
-  // Wrap in anchor if URL available
   if (item.url) {
     return (
       <a href={item.url} target="_blank" rel="noopener noreferrer" className="block no-underline">

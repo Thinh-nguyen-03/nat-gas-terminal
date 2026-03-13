@@ -69,7 +69,6 @@ export function WeatherPanel() {
       error={error}
     >
       <div className="flex flex-col h-full p-3 gap-2">
-        {/* Headline */}
         <div className="flex items-start justify-between gap-2">
           <div>
             <div className="flex items-baseline gap-2">
@@ -120,7 +119,6 @@ export function WeatherPanel() {
           )}
         </div>
 
-        {/* CPC Outlook */}
         {data?.cpc_outlook && (
           <div
             className="flex gap-4"
@@ -131,7 +129,6 @@ export function WeatherPanel() {
           </div>
         )}
 
-        {/* City Table */}
         {data?.cities && data.cities.length > 0 && (
           <div style={{ borderTop: '1px solid #1e2433', paddingTop: 6 }}>
             <div
@@ -162,7 +159,6 @@ export function WeatherPanel() {
           </div>
         )}
 
-        {/* HDD Chart */}
         <div className="flex-1 min-h-0" style={{ minHeight: 70 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
@@ -188,6 +184,8 @@ export function WeatherPanel() {
                   fontSize: 11,
                   color: '#e2e8f0',
                 }}
+                labelStyle={{ color: '#e2e8f0' }}
+                itemStyle={{ color: '#e2e8f0' }}
                 formatter={(value: number, name: string) => [
                   fmt(value, 0),
                   name === 'hdd' ? 'HDD 7d' : 'CDD 7d',
@@ -196,10 +194,10 @@ export function WeatherPanel() {
               <Line
                 type="monotone"
                 dataKey="hdd"
-                stroke="#22d3ee"
+                stroke="#93c5fd"
                 strokeWidth={1.5}
                 dot={false}
-                activeDot={{ r: 3, fill: '#22d3ee' }}
+                activeDot={{ r: 3, fill: '#93c5fd' }}
               />
               <Line
                 type="monotone"

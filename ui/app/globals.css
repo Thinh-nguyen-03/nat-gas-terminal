@@ -28,8 +28,12 @@ body {
 }
 
 .num {
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-jetbrains-mono), monospace;
   font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: var(--font-jetbrains-mono), monospace;
 }
 
 /* Scrollbar styling */

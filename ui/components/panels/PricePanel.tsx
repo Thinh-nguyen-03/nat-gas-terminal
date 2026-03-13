@@ -67,7 +67,6 @@ export function PricePanel() {
       error={error}
     >
       <div className="flex flex-col h-full p-3 gap-2">
-        {/* Headline */}
         <div className="flex items-start justify-between gap-2">
           <div>
             <div className="flex items-baseline gap-3">
@@ -124,10 +123,9 @@ export function PricePanel() {
           </div>
         )}
 
-        {/* Price Chart */}
         <div style={{ height: 100 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={priceChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+            <LineChart data={priceChartData} margin={{ top: 4, right: 0, left: 4, bottom: 0 }}>
               <XAxis
                 dataKey="date"
                 tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
@@ -139,7 +137,7 @@ export function PricePanel() {
                 tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
                 axisLine={false}
                 tickLine={false}
-                width={32}
+                width={42}
                 domain={['auto', 'auto']}
                 tickFormatter={(v: number) => `$${v.toFixed(2)}`}
               />
@@ -152,15 +150,17 @@ export function PricePanel() {
                   fontSize: 11,
                   color: '#e2e8f0',
                 }}
+                labelStyle={{ color: '#e2e8f0' }}
+                itemStyle={{ color: '#e2e8f0' }}
                 formatter={(value: number) => [`$${fmt(value, 3)}`, 'Close']}
               />
               <Line
                 type="monotone"
                 dataKey="close"
-                stroke="#22d3ee"
+                stroke="#f59e0b"
                 strokeWidth={1.5}
                 dot={false}
-                activeDot={{ r: 3, fill: '#22d3ee' }}
+                activeDot={{ r: 3, fill: '#f59e0b' }}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -177,7 +177,7 @@ export function PricePanel() {
             </div>
             <div style={{ height: 90 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={curveChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                <BarChart data={curveChartData} margin={{ top: 4, right: 0, left: 4, bottom: 0 }}>
                   <XAxis
                     dataKey="ticker"
                     tick={{ fill: '#94a3b8', fontSize: 8, fontFamily: 'JetBrains Mono, monospace' }}
@@ -188,7 +188,7 @@ export function PricePanel() {
                     tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
                     axisLine={false}
                     tickLine={false}
-                    width={34}
+                    width={40}
                     domain={[(dataMin: number) => Math.floor(dataMin * 10 - 1) / 10, (dataMax: number) => Math.ceil(dataMax * 10 + 1) / 10]}
                     tickFormatter={(v: number) => `$${v.toFixed(1)}`}
                   />
@@ -201,9 +201,11 @@ export function PricePanel() {
                       fontSize: 11,
                       color: '#e2e8f0',
                     }}
+                    labelStyle={{ color: '#e2e8f0' }}
+                    itemStyle={{ color: '#e2e8f0' }}
                     formatter={(value: number, _: string, props: { payload?: { ticker?: string } }) => [`$${fmt(value, 3)}`, props.payload?.ticker ?? 'Price']}
                   />
-                  <Bar dataKey="price" fill="#22d3ee" fillOpacity={0.6} radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="price" fill="#a5b4fc" fillOpacity={0.6} radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

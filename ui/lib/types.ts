@@ -299,6 +299,7 @@ export interface NewsItem {
   score: number
   sentiment: 'bullish' | 'bearish' | 'neutral'
   tags: string[]
+  implication?: string | null
 }
 export interface NewsResponse {
   items: NewsItem[]

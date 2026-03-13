@@ -20,101 +20,82 @@ export function BriefPanel() {
       loading={loading}
       error={error}
     >
-      <div className="flex flex-col h-full p-3 gap-3 overflow-hidden">
-        {content && (
-          <div className="flex flex-col gap-3 h-full">
-            {/* Two-column layout: outlook+drivers on left, risk on right */}
-            <div className="flex gap-4 flex-1 min-h-0">
+      <div className="mono h-full overflow-hidden" style={{ display: 'flex', padding: '10px 0' }}>
+        {content && <>
+          {/* Left column: Outlook headline + Key Drivers below */}
+          <div style={{
+            flex: '1 1 0',
+            minWidth: 0,
+            borderLeft: '2px solid #22d3ee',
+            marginLeft: 12,
+            paddingLeft: 12,
+            paddingRight: 24,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0,
+          }}>
+            {/* Outlook */}
+            <div style={{ color: '#22d3ee', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}>
+              Outlook
+            </div>
+            <div style={{ color: '#f1f5f9', fontSize: 13, lineHeight: 1.55, fontWeight: 500 }}>
+              {content.outlook}
+            </div>
 
-              {/* Left: Outlook + Drivers */}
-              <div className="flex flex-col gap-2 flex-1 min-w-0">
-                {/* Outlook */}
-                <div
-                  className="text-sm leading-relaxed"
-                  style={{
-                    color: '#e2e8f0',
-                    fontFamily: 'Inter, sans-serif',
-                    borderLeft: '2px solid #22d3ee',
-                    paddingLeft: 10,
-                  }}
-                >
-                  {content.outlook}
+            {/* Key Drivers */}
+            {content.drivers.length > 0 && (
+              <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #1e2433' }}>
+                <div style={{ color: '#fbbf24', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}>
+                  Key Drivers
                 </div>
-
-                {/* Key Drivers */}
-                {content.drivers.length > 0 && (
-                  <div className="flex flex-col gap-1">
-                    <div
-                      className="text-xs uppercase tracking-widest"
-                      style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace', fontSize: 9 }}
-                    >
-                      Key Drivers
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {content.drivers.map((d, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 7, alignItems: 'baseline' }}>
+                      <span style={{ color: '#22d3ee', flexShrink: 0, fontSize: 11 }}>›</span>
+                      <span style={{ color: '#b8c4d0', fontSize: 11, lineHeight: 1.45 }}>{d}</span>
                     </div>
-                    <ul className="flex flex-col gap-0.5">
-                      {content.drivers.map((d, i) => (
-                        <li key={i} className="flex gap-1.5 items-start text-xs">
-                          <span style={{ color: '#22d3ee', flexShrink: 0, fontFamily: 'JetBrains Mono, monospace' }}>›</span>
-                          <span style={{ color: '#94a3b8', fontFamily: 'Inter, sans-serif' }}>{d}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              {/* Right: Tail Risk */}
-              {content.risk && (
-                <div
-                  className="flex flex-col gap-1 shrink-0"
-                  style={{ width: '28%', minWidth: 160 }}
-                >
-                  <div
-                    className="text-xs uppercase tracking-widest"
-                    style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace', fontSize: 9 }}
-                  >
-                    Tail Risk
-                  </div>
-                  <div
-                    className="text-xs leading-relaxed"
-                    style={{
-                      color: '#94a3b8',
-                      fontFamily: 'Inter, sans-serif',
-                      borderLeft: '2px solid #f87171',
-                      paddingLeft: 8,
-                    }}
-                  >
-                    {content.risk}
-                  </div>
+                  ))}
                 </div>
-              )}
-            </div>
-
-            {/* Footer: model badge + date */}
-            <div
-              className="flex items-center gap-2 shrink-0"
-              style={{ borderTop: '1px solid #1e2433', paddingTop: 4 }}
-            >
-              <span
-                className="text-xs px-1.5"
-                style={{
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: 9,
-                  color: '#22d3ee',
-                  backgroundColor: 'rgba(34,211,238,0.08)',
-                  border: '1px solid rgba(34,211,238,0.15)',
-                }}
-              >
-                {content.model}
-              </span>
-              <span
-                className="text-xs num"
-                style={{ color: '#334155', fontFamily: 'JetBrains Mono, monospace', fontSize: 9 }}
-              >
-                {data?.date}
-              </span>
-            </div>
+              </div>
+            )}
           </div>
-        )}
+
+          {/* Right column: Tail Risk + footer */}
+          {content.risk && (
+            <div style={{
+              flexShrink: 0,
+              width: '30%',
+              minWidth: 200,
+              borderLeft: '2px solid rgba(248,113,113,0.35)',
+              marginRight: 12,
+              paddingLeft: 14,
+              paddingRight: 12,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0,
+            }}>
+              <div style={{ color: '#f87171', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}>
+                Tail Risk
+              </div>
+              <div style={{ color: '#b8c4d0', fontSize: 11, lineHeight: 1.55, flex: 1 }}>
+                {content.risk}
+              </div>
+              <div style={{ display: 'flex', gap: 7, alignItems: 'center', marginTop: 10 }}>
+                <span style={{
+                  fontSize: 8,
+                  color: '#22d3ee',
+                  backgroundColor: 'rgba(34,211,238,0.07)',
+                  border: '1px solid rgba(34,211,238,0.18)',
+                  padding: '1px 5px',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {content.model}
+                </span>
+                <span style={{ color: '#94a3b8', fontSize: 8 }}>{data?.date}</span>
+              </div>
+            </div>
+          )}
+        </>}
       </div>
     </PanelShell>
   )

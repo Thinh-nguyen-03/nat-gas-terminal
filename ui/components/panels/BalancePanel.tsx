@@ -56,7 +56,6 @@ export function BalancePanel() {
       error={error}
     >
       <div className="flex flex-col h-full p-3 gap-2">
-        {/* Headline */}
         <div className="flex items-start justify-between gap-2">
           <div>
             <div className="flex items-baseline gap-2">
@@ -86,12 +85,10 @@ export function BalancePanel() {
           )}
         </div>
 
-        {/* Supply + Demand side by side */}
         <div
           className="grid gap-3"
           style={{ gridTemplateColumns: '1fr 1fr', borderTop: '1px solid #1e2433', paddingTop: 6 }}
         >
-          {/* Supply */}
           <div>
             <div
               className="text-xs uppercase tracking-wider mb-1 flex justify-between"
@@ -109,7 +106,6 @@ export function BalancePanel() {
             </div>
           </div>
 
-          {/* Demand */}
           <div>
             <div
               className="text-xs uppercase tracking-wider mb-1 flex justify-between"

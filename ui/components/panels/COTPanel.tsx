@@ -51,7 +51,6 @@ export function COTPanel() {
       error={error}
     >
       <div className="flex flex-col h-full p-3 gap-2">
-        {/* Headline */}
         <div className="flex items-start justify-between gap-2">
           <div>
             <div className="flex items-baseline gap-2">
@@ -85,7 +84,6 @@ export function COTPanel() {
           )}
         </div>
 
-        {/* Feature Table */}
         {data?.features && data.features.length > 0 && (
           <div style={{ borderTop: '1px solid #1e2433', paddingTop: 6 }}>
             <div className="flex flex-col gap-0.5">
@@ -106,10 +104,9 @@ export function COTPanel() {
           </div>
         )}
 
-        {/* MM Net Chart */}
         <div className="flex-1 min-h-0" style={{ minHeight: 80 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+            <BarChart data={chartData} margin={{ top: 4, right: 0, left: 4, bottom: 0 }}>
               <XAxis
                 dataKey="date"
                 tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
@@ -125,6 +122,7 @@ export function COTPanel() {
                 tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
               />
               <Tooltip
+                cursor={{ fill: '#e2e8f0', fillOpacity: 0.06 }}
                 contentStyle={{
                   backgroundColor: '#141720',
                   border: '1px solid #1e2433',
@@ -133,6 +131,8 @@ export function COTPanel() {
                   fontSize: 11,
                   color: '#e2e8f0',
                 }}
+                labelStyle={{ color: '#e2e8f0' }}
+                itemStyle={{ color: '#e2e8f0' }}
                 formatter={(value: number) => [
                   value !== null ? Math.round(value).toLocaleString('en-US') : '—',
                   'MM Net',

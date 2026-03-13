@@ -24,6 +24,7 @@ function StatusDot({ status }: { status: string }) {
     reduced:     '#fbbf24',
     offline:     '#f87171',
     idle:        '#475569',
+    provisional: '#475569',
   }
   const color = colorMap[status.toLowerCase()] ?? '#94a3b8'
   return (
@@ -40,31 +41,59 @@ function StatusDot({ status }: { status: string }) {
   )
 }
 
+// formatDest trims AIS destination codes that are just 5-char LOCODE placeholders
+// (e.g. "USNSS", "USUNK") down to the country prefix so traders see "US" rather
+// than an opaque code. Meaningful names (>5 chars or all-alpha <5) pass through.
+function formatDest(raw: string): string {
+  const s = raw.trim().toUpperCase()
+  if (!s) return ''
+  // 5-char LOCODE pattern: 2-letter country + 3-letter location
+  if (/^[A-Z]{2}[A-Z0-9]{3}$/.test(s)) {
+    // Well-known European terminal LOCODEs → human name
+    const known: Record<string, string> = {
+      NLRTM: 'Rotterdam', BEZEE: 'Zeebrugge', GBGRI: 'Isle of Grain',
+      GBMIL: 'Milford Haven', FRDKK: 'Dunkerque', FRMTX: 'Montoir',
+      FRFOS: 'Fos-sur-Mer', ESBIO: 'Bilbao', ESHUE: 'Huelva',
+      ESALC: 'Barcelona', PTSIN: 'Sines', GRREV: 'Revithoussa',
+      TRIST: 'Istanbul',
+    }
+    if (known[s]) return known[s]
+    // Generic: just show country code — "US", "JP", etc.
+    return s.slice(0, 2)
+  }
+  return s
+}
+
 function VesselRow({ vessel }: { vessel: AISVessel }) {
   const hours = vessel.dwell_minutes > 0 ? Math.round(vessel.dwell_minutes / 60) : null
-  const dest = vessel.destination?.trim() || null
-  const isLoading = vessel.status === 'loading'
+  const rawDest = vessel.destination?.trim() || ''
+  const dest = rawDest ? formatDest(rawDest) : null
+
+  const statusColor = vessel.status === 'loading' ? '#4ade80'
+    : vessel.status === 'anchored' ? '#fbbf24'
+    : '#64748b'
+  const statusLabel = vessel.status === 'loading' ? 'loading'
+    : vessel.status === 'anchored' ? 'anchored'
+    : 'unconfirmed'
+
+  const dot = <span style={{ color: '#64748b', padding: '0 2px' }}>·</span>
 
   return (
-    <div
-      className="flex items-center gap-1.5 pl-5"
-      style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#94a3b8' }}
-    >
-      <span style={{ color: isLoading ? '#4ade80' : '#fbbf24', fontSize: 8 }}>└</span>
-      <span style={{ color: '#94a3b8', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 4,
+      paddingLeft: 18, paddingTop: 0, paddingBottom: 0,
+      fontFamily: 'JetBrains Mono, monospace',
+      whiteSpace: 'nowrap', overflow: 'hidden',
+    }}>
+      <span style={{ color: statusColor, fontSize: 10, flexShrink: 0 }}>└</span>
+      <span style={{ color: '#94a3b8', fontSize: 9, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}
+        title={vessel.name || `MMSI ${vessel.mmsi}`}>
         {vessel.name || `MMSI:${vessel.mmsi}`}
       </span>
-      {hours !== null && hours > 0 && (
-        <span style={{ color: '#64748b' }}>{hours}h</span>
-      )}
-      {dest && (
-        <span
-          style={{ color: '#64748b', maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-          title={dest}
-        >
-          →{dest}
-        </span>
-      )}
+      {dot}
+      <span style={{ color: statusColor, fontSize: 10, flexShrink: 0 }}>{statusLabel}</span>
+      {hours !== null && hours > 0 && <>{dot}<span style={{ color: '#94a3b8', fontSize: 10, flexShrink: 0 }}>{hours}h</span></>}
+      {dest && <>{dot}<span style={{ color: '#94a3b8', fontSize: 10, flexShrink: 0 }} title={rawDest}>→ {dest}</span></>}
     </div>
   )
 }
@@ -116,7 +145,6 @@ export function LNGPanel() {
           </div>
         )}
 
-        {/* Headline */}
         <div className="flex items-start justify-between gap-2">
           <div>
             <div className="flex items-baseline gap-2">
@@ -171,27 +199,25 @@ export function LNGPanel() {
 
         {/* Terminal Table with inline vessel manifest */}
         {data?.terminals && data.terminals.length > 0 && (
-          <div style={{ borderTop: '1px solid #1e2433', paddingTop: 6 }}>
-            {/* Header row with column labels */}
+          <div style={{ borderTop: '1px solid #1e2433', paddingTop: 6, overflowY: 'auto', maxHeight: 280 }}>
             <div
               className="flex items-center justify-between mb-1"
               style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9 }}
             >
-              <span style={{ color: '#475569' }}>TERMINALS</span>
+              <span style={{ color: '#64748b' }}>TERMINALS</span>
               <div className="flex shrink-0 num" style={{ gap: 0 }}>
                 <span className="w-10 text-right" style={{ color: '#4ade80', opacity: 0.6 }}>LOAD</span>
                 <span className="w-10 text-right" style={{ color: '#fbbf24', opacity: 0.6 }}>ANCH</span>
-                <span className="w-10 text-right" style={{ color: '#475569' }}>CAP</span>
+                <span className="w-10 text-right" style={{ color: '#64748b' }}>CAP</span>
               </div>
             </div>
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-0">
               {data.terminals.map((t: LNGTerminal) => {
                 const termVessels = vessels.filter((v: AISVessel) => v.terminal === t.name)
-                const loadColor = (t.ships_loading ?? 0) > 0 ? '#4ade80' : '#334155'
-                const anchColor = (t.ships_anchored ?? 0) > 0 ? '#fbbf24' : '#334155'
+                const loadColor = (t.ships_loading ?? 0) > 0 ? '#4ade80' : '#64748b'
+                const anchColor = (t.ships_anchored ?? 0) > 0 ? '#fbbf24' : '#64748b'
                 return (
                   <div key={t.name}>
-                    {/* Terminal row */}
                     <div className="flex items-center justify-between text-xs gap-1">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <StatusDot status={t.status} />
@@ -212,7 +238,7 @@ export function LNGPanel() {
                         <span className="w-10 text-right" style={{ color: anchColor }} title="Ships anchored waiting for berth">
                           {t.ships_anchored ?? '—'}
                         </span>
-                        <span className="w-10 text-right" style={{ color: '#475569' }}>
+                        <span className="w-10 text-right" style={{ color: '#64748b' }}>
                           {fmt(t.capacity_bcfd, 1)}
                         </span>
                       </div>
@@ -228,14 +254,13 @@ export function LNGPanel() {
           </div>
         )}
 
-        {/* Chart */}
         <div style={{ height: 250, flexShrink: 0 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+            <AreaChart data={chartData} margin={{ top: 4, right: 0, left: 4, bottom: 0 }}>
               <defs>
                 <linearGradient id="lngGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#22d3ee" stopOpacity={0.02} />
+                  <stop offset="5%" stopColor="#818cf8" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#818cf8" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               <XAxis
@@ -249,7 +274,7 @@ export function LNGPanel() {
                 tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
                 axisLine={false}
                 tickLine={false}
-                width={28}
+                width={32}
                 domain={['auto', 'auto']}
               />
               <Tooltip
@@ -261,16 +286,18 @@ export function LNGPanel() {
                   fontSize: 11,
                   color: '#e2e8f0',
                 }}
+                labelStyle={{ color: '#e2e8f0' }}
+                itemStyle={{ color: '#e2e8f0' }}
                 formatter={(value: number) => [fmt(value, 2, ' BCF/D'), 'Exports']}
               />
               <Area
                 type="monotone"
                 dataKey="exports"
-                stroke="#22d3ee"
+                stroke="#818cf8"
                 strokeWidth={1.5}
                 fill="url(#lngGrad)"
                 dot={false}
-                activeDot={{ r: 3, fill: '#22d3ee' }}
+                activeDot={{ r: 3, fill: '#818cf8' }}
               />
             </AreaChart>
           </ResponsiveContainer>

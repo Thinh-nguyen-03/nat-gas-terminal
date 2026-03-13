@@ -44,7 +44,14 @@ export default function DashboardPage() {
 
       {/* Main grid */}
       <div className="flex-1 p-3 flex flex-col gap-3 overflow-auto">
-        {/* Row 1: Score (4) + Weather (4) + Power (4) — compact metric panels */}
+        {/* Row 1: Market Brief (12) — full-width Gemini synthesis at top */}
+        <div className="grid grid-cols-12 gap-3" style={{ minHeight: 190 }}>
+          <div className="col-span-12 h-full">
+            <BriefPanel />
+          </div>
+        </div>
+
+        {/* Row 2: Score (4) + Weather (4) + Power (4) — compact metric panels */}
         <div className="grid grid-cols-12 gap-3" style={{ minHeight: 240 }}>
           <div className="col-span-4 h-full">
             <ScorePanel />
@@ -57,7 +64,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Row 2: Price (6) + Storage (6) — chart panels, half-width each */}
+        {/* Row 3: Price (6) + Storage (6) — chart panels, half-width each */}
         <div className="grid grid-cols-12 gap-3" style={{ minHeight: 300 }}>
           <div className="col-span-6 h-full">
             <PricePanel />
@@ -67,40 +74,35 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Row 3: LNG (7) + COT (5) — chart-heavy panels */}
-        <div className="grid grid-cols-12 gap-3" style={{ minHeight: 320 }}>
+        {/* Row 4: COT (5) + [Balance / Analogs stacked] (7) — COT chart expands to match */}
+        <div className="grid grid-cols-12 gap-3" style={{ minHeight: 460 }}>
+          <div className="col-span-5 h-full">
+            <COTPanel />
+          </div>
+          <div className="col-span-7 h-full flex flex-col gap-3">
+            <div style={{ height: 220, flexShrink: 0 }}>
+              <BalancePanel />
+            </div>
+            <div className="flex-1 min-h-0">
+              <AnalogsPanel />
+            </div>
+          </div>
+        </div>
+
+        {/* Row 5: LNG (7) + Calendar (5) — both tall/scrollable, natural pairing */}
+        <div className="grid grid-cols-12 gap-3" style={{ minHeight: 420 }}>
           <div className="col-span-7 h-full">
             <LNGPanel />
           </div>
           <div className="col-span-5 h-full">
-            <COTPanel />
-          </div>
-        </div>
-
-        {/* Row 4: Calendar (5) + News Wire (7) */}
-        <div className="grid grid-cols-12 gap-3" style={{ minHeight: 280 }}>
-          <div className="col-span-5 h-full">
             <CalendarPanel />
           </div>
-          <div className="col-span-7 h-full">
-            <NewsPanel />
-          </div>
         </div>
 
-        {/* Row 5: Balance (6) + Analogs (6) */}
+        {/* Row 6: News Wire (12) — full-width */}
         <div className="grid grid-cols-12 gap-3" style={{ minHeight: 260 }}>
-          <div className="col-span-6 h-full">
-            <BalancePanel />
-          </div>
-          <div className="col-span-6 h-full">
-            <AnalogsPanel />
-          </div>
-        </div>
-
-        {/* Row 6: Market Brief (12) — full-width Gemini synthesis */}
-        <div className="grid grid-cols-12 gap-3" style={{ minHeight: 160 }}>
           <div className="col-span-12 h-full">
-            <BriefPanel />
+            <NewsPanel />
           </div>
         </div>
       </div>

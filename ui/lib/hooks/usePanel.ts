@@ -26,8 +26,7 @@ export function usePanel<T>(endpoint: string, sseSources: string[]): PanelState<
     if (!isRefresh) setLoading(true)
     setError(false)
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
-      const res = await fetch(`${apiUrl}${endpoint}`)
+      const res = await fetch(endpoint)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json: T = await res.json()
       setData(json)

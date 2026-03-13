@@ -53,7 +53,6 @@ export function PowerPanel() {
           </div>
         )}
 
-        {/* Headline */}
         <div className="flex items-start justify-between gap-2">
           <div>
             <div className="flex items-baseline gap-2">
@@ -69,7 +68,6 @@ export function PowerPanel() {
           <SignalBadge interpretation={interpretation} size="sm" />
         </div>
 
-        {/* ISO Table */}
         {data?.isos && data.isos.length > 0 && (
           <div style={{ borderTop: '1px solid #1e2433', paddingTop: 6 }}>
             <div
@@ -119,7 +117,6 @@ export function PowerPanel() {
           </div>
         )}
 
-        {/* Stress Index Chart */}
         <div className="flex-1 min-h-0" style={{ minHeight: 70 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
@@ -146,6 +143,8 @@ export function PowerPanel() {
                   fontSize: 11,
                   color: '#e2e8f0',
                 }}
+                labelStyle={{ color: '#e2e8f0' }}
+                itemStyle={{ color: '#e2e8f0' }}
                 formatter={(value: number) => [fmt(value, 2), 'Stress Index']}
               />
               <ReferenceLine y={0} stroke="#1e2433" strokeDasharray="3 3" />
