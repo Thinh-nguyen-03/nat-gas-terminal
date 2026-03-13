@@ -31,8 +31,6 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Configuration
-
 const (
 	wsURL         = "wss://stream.aisstream.io/v0/stream"
 	writeInterval = 5 * time.Minute // how often to flush counts to API server
@@ -98,8 +96,6 @@ type shipStaticData struct {
 	Destination string  `json:"Destination"`
 	Draught     float64 `json:"Draught"`
 }
-
-// In-memory vessel state
 
 type vessel struct {
 	mmsi        int
@@ -203,11 +199,13 @@ func (vm *vesselMap) classify() (map[string][2]int, []vesselPayload) {
 		if !v.hasPos {
 			continue
 		}
-		// Only count vessels confirmed as LNG tankers (ship type 84).
-		// Class B transponders (tugs, support vessels) never send static data,
-		if !v.hasType || v.shipType != lngShipType {
-			continue
-		}
+
+		// Type filter: confirmed type-84 LNG tanker, OR provisionally include
+		// untyped vessels that are nearly stopped within tight berth range.
+		// Provisional vessels are later marked status="provisional" in the payload.
+		// Tugs/pilots are excluded because they move constantly (SOG > 0.3 kts)
+		// or park outside the tight berth radius.
+		isConfirmed := v.hasType && v.shipType == lngShipType
 
 		for _, t := range terminals {
 			d := haversineDeg(v.lat, v.lon, t.lat, t.lon)
@@ -215,14 +213,24 @@ func (vm *vesselMap) classify() (map[string][2]int, []vesselPayload) {
 				continue
 			}
 			isBerth := d <= 0.05
+			isTightBerth := d <= 0.03 // ~3 km — squarely on the dock
 			isMoored := v.nav == 5 || (v.sog < 0.5 && isBerth)
 			isAnchored := v.nav == 1 || (v.sog < 2.0 && !isMoored && d <= t.box)
 
+			// Provisional: untyped vessel that is nearly stationary at the dock.
+			if !isConfirmed && !(isTightBerth && v.sog < 0.3) {
+				continue
+			}
+
 			c := counts[t.name]
 			var status string
-			if isMoored {
+			if isMoored || (!isConfirmed && isTightBerth) {
 				c[0]++
-				status = "loading"
+				if isConfirmed {
+					status = "loading"
+				} else {
+					status = "provisional"
+				}
 			} else if isAnchored {
 				c[1]++
 				status = "anchored"
@@ -247,8 +255,6 @@ func (vm *vesselMap) classify() (map[string][2]int, []vesselPayload) {
 	}
 	return counts, vessels
 }
-
-// WebSocket stream
 
 func streamLoop(apiKey string, vm *vesselMap, stop <-chan struct{}) {
 	backoff := reconnectBase
@@ -311,6 +317,22 @@ func runSession(apiKey string, vm *vesselMap, stop <-chan struct{}) error {
 		}
 	}()
 
+	// AISstream.io drops idle connections after ~2 min without a ping.
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second)); err != nil {
+					return
+				}
+			case <-stop:
+				return
+			}
+		}
+	}()
+
 	for {
 		select {
 		case <-stop:
@@ -328,8 +350,6 @@ func runSession(apiKey string, vm *vesselMap, stop <-chan struct{}) error {
 	}
 }
 
-// Periodic POST to API server
-
 func writeLoop(apiURL, apiKey string, vm *vesselMap, stop <-chan struct{}) {
 	ticker := time.NewTicker(writeInterval)
 	defer ticker.Stop()
@@ -339,12 +359,47 @@ func writeLoop(apiURL, apiKey string, vm *vesselMap, stop <-chan struct{}) {
 		case <-stop:
 			return
 		case <-ticker.C:
+			logVesselDiagnostics(vm)
 			counts, vessels := vm.classify()
 			if err := postWithRetry(apiURL, apiKey, counts, vessels); err != nil {
 				slog.Error("AIS post failed", "err", err)
 			}
 		}
 	}
+}
+
+// logVesselDiagnostics logs the vessel map breakdown at each filter stage.
+func logVesselDiagnostics(vm *vesselMap) {
+	vm.mu.RLock()
+	defer vm.mu.RUnlock()
+
+	total := len(vm.data)
+	withPos, withType, type84, inBox := 0, 0, 0, 0
+	for _, v := range vm.data {
+		if v.hasPos {
+			withPos++
+		}
+		if v.hasType {
+			withType++
+		}
+		if v.hasType && v.shipType == lngShipType {
+			type84++
+			// check if in any terminal box
+			for _, t := range terminals {
+				if haversineDeg(v.lat, v.lon, t.lat, t.lon) <= t.box {
+					inBox++
+					break
+				}
+			}
+		}
+	}
+	slog.Info("AIS vessel map",
+		"total_seen", total,
+		"with_position", withPos,
+		"with_static_data", withType,
+		"type_84_lng", type84,
+		"type_84_in_box", inBox,
+	)
 }
 
 func postWithRetry(apiURL, apiKey string, counts map[string][2]int, vessels []vesselPayload) error {
@@ -403,8 +458,6 @@ func postAIS(apiURL, apiKey string, counts map[string][2]int, vessels []vesselPa
 	return nil
 }
 
-// Helpers
-
 func haversineDeg(lat1, lon1, lat2, lon2 float64) float64 {
 	dlat := math.Abs(lat1 - lat2)
 	dlon := math.Abs(lon1-lon2) * math.Cos(math.Pi/180*((lat1+lat2)/2))
@@ -417,8 +470,6 @@ func minDuration(a, b time.Duration) time.Duration {
 	}
 	return b
 }
-
-// Main
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))

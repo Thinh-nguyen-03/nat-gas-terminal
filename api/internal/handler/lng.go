@@ -81,7 +81,13 @@ var knownTerminals = []LNGTerminal{
 
 // LNG handles GET /api/lng.
 func (h *Handler) LNG(w http.ResponseWriter, r *http.Request) {
-	db := h.DB
+	db, err := h.openDB()
+	if err != nil {
+		slog.Error("db open failed", "err", err)
+		writeError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	defer db.Close()
 
 	summary, terminals, hasLiveData, err := h.queryLNGStatus(r, db)
 	if err != nil {

@@ -66,7 +66,13 @@ var weatherCities = []string{
 
 // Weather handles GET /api/weather.
 func (h *Handler) Weather(w http.ResponseWriter, r *http.Request) {
-	db := h.DB
+	db, err := h.openDB()
+	if err != nil {
+		slog.Error("db open failed", "err", err)
+		writeError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	defer db.Close()
 
 	summary, err := h.queryWeatherSummary(r, db)
 	if err != nil {
@@ -190,7 +196,6 @@ func (h *Handler) queryWeatherCities(r *http.Request, db *sql.DB) ([]WeatherCity
 		seriesTemp = "forecast_temp_f"
 	)
 
-	// Build args: 3 series names + N city names.
 	args := make([]any, 0, 3+len(weatherCities))
 	args = append(args, seriesHDD, seriesCDD, seriesTemp)
 	for _, city := range weatherCities {

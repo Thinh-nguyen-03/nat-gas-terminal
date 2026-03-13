@@ -12,15 +12,14 @@ import (
 	"time"
 
 	_ "github.com/marcboeker/go-duckdb"
-	appdb "github.com/nat-gas-terminal/api/internal/db"
 	"github.com/nat-gas-terminal/api/internal/handler"
 	"github.com/nat-gas-terminal/api/internal/sse"
 )
 
 // newTestDB creates a temporary DuckDB file, initialises the schema, seeds
-// known rows, and returns a read-only connection to it.
+// known rows, and returns the file path.
 // The returned cleanup func deletes the file when called.
-func newTestDB(t *testing.T) (*sql.DB, func()) {
+func newTestDB(t *testing.T) (string, func()) {
 	t.Helper()
 
 	// Generate a unique temp path without creating the file.
@@ -44,16 +43,7 @@ func newTestDB(t *testing.T) (*sql.DB, func()) {
 	seedData(t, rw)
 	rw.Close()
 
-	// Re-open read-only as the API would.
-	ro, err := appdb.Open(path)
-	if err != nil {
-		os.Remove(path)
-		t.Fatalf("open ro duckdb: %v", err)
-	}
-	return ro, func() {
-		ro.Close()
-		os.Remove(path)
-	}
+	return path, func() { os.Remove(path) }
 }
 
 func seedSchema(t *testing.T, db *sql.DB) {
@@ -247,9 +237,9 @@ func seedData(t *testing.T, db *sql.DB) {
 // newTestServer builds a Handler from the seeded DB and returns an httptest server.
 func newTestServer(t *testing.T) (*httptest.Server, func()) {
 	t.Helper()
-	db, cleanup := newTestDB(t)
+	dbPath, cleanup := newTestDB(t)
 	h := &handler.Handler{
-		DB:          db,
+		DBPath:      dbPath,
 		Broker:      sse.NewBroker(),
 		InternalKey: "test-key",
 	}

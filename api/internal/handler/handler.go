@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	appdb "github.com/nat-gas-terminal/api/internal/db"
 	"github.com/nat-gas-terminal/api/internal/sse"
 )
 
@@ -19,14 +20,20 @@ type Handler struct {
 	// InternalKey is the pre-shared key required on POST /internal/notify and /internal/ais.
 	// An empty string disables the check (development only).
 	InternalKey string
-	// DB is the shared read-only DuckDB connection pool, opened once at startup.
-	// SetMaxOpenConns(1)+SetMaxIdleConns(0) ensures the file lock is released between
-	// queries so the Python scheduler can write, while serializing concurrent Go requests.
-	DB *sql.DB
+	// DBPath is the path to the DuckDB file. Each handler opens a fresh connection
+	// via openDB() and closes it immediately after the query, releasing the file lock
+	// so the Python scheduler can acquire a write lock between API requests.
+	DBPath string
 	// SnapshotDir is the directory where ais_snapshot.json is written (data/ dir).
 	SnapshotDir string
 	// AIS holds the latest vessel snapshot received from cmd/ais.
 	AIS *AISState
+}
+
+// openDB opens a fresh read-only DuckDB connection for one request.
+// The caller must defer db.Close() to release the file lock.
+func (h *Handler) openDB() (*sql.DB, error) {
+	return appdb.Open(h.DBPath)
 }
 
 // writeJSON serialises v as JSON and writes it with the given status code.

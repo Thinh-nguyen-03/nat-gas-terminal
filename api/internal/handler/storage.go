@@ -80,7 +80,13 @@ var storageFeatureNames = []string{
 // Storage handles GET /api/storage.
 // Returns today's computed storage features and the EIA 5-year band values.
 func (h *Handler) Storage(w http.ResponseWriter, r *http.Request) {
-	db := h.DB
+	db, err := h.openDB()
+	if err != nil {
+		slog.Error("db open failed", "err", err)
+		writeError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	defer db.Close()
 
 	args := make([]any, len(storageFeatureNames))
 	for i, n := range storageFeatureNames {

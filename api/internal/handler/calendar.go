@@ -30,7 +30,13 @@ type CalendarResponse struct {
 // Returns all catalyst calendar events for the next 30 days, ordered by date.
 // Events are populated by collectors/catalyst_calendar.py (runs daily 6 AM ET).
 func (h *Handler) Calendar(w http.ResponseWriter, r *http.Request) {
-	db := h.DB
+	db, err := h.openDB()
+	if err != nil {
+		slog.Error("db open failed", "err", err)
+		writeError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	defer db.Close()
 
 	rows, err := db.QueryContext(r.Context(), `
 		SELECT

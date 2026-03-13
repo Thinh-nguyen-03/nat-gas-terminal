@@ -60,7 +60,13 @@ type PriceResponse struct {
 
 // Price handles GET /api/price.
 func (h *Handler) Price(w http.ResponseWriter, r *http.Request) {
-	db := h.DB
+	db, err := h.openDB()
+	if err != nil {
+		slog.Error("db open failed", "err", err)
+		writeError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	defer db.Close()
 
 	history, err := h.queryOHLCV(r, db)
 	if err != nil {

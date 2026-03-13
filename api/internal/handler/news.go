@@ -18,6 +18,7 @@ type NewsItem struct {
 	Score       float64  `json:"score"`
 	Sentiment   string   `json:"sentiment"`
 	Tags        []string `json:"tags"`
+	Implication *string  `json:"implication"`
 }
 
 // NewsResponse is the JSON body for GET /api/news.
@@ -29,10 +30,18 @@ type NewsResponse struct {
 // News handles GET /api/news.
 // Returns the last 48h of scored headlines, ordered by relevance then recency.
 func (h *Handler) News(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.DB.QueryContext(r.Context(), `
-		SELECT id, source, title, url, published_at::VARCHAR, score, sentiment, tags
+	db, err := h.openDB()
+	if err != nil {
+		slog.Error("db open failed", "err", err)
+		writeError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	defer db.Close()
+
+	rows, err := db.QueryContext(r.Context(), `
+		SELECT id, source, title, url, published_at::VARCHAR, score, sentiment, tags, implication
 		FROM news_items
-		WHERE fetched_at >= NOW() - INTERVAL '48 hours'
+		WHERE fetched_at >= NOW()::TIMESTAMP - INTERVAL '7 days'
 		ORDER BY score DESC, published_at DESC NULLS LAST
 		LIMIT 30
 	`)
@@ -46,16 +55,17 @@ func (h *Handler) News(w http.ResponseWriter, r *http.Request) {
 	var items []NewsItem
 	for rows.Next() {
 		var item NewsItem
-		var url, pubAt, tagsRaw sql.NullString
+		var url, pubAt, tagsRaw, implication sql.NullString
 		if err := rows.Scan(
 			&item.ID, &item.Source, &item.Title,
-			&url, &pubAt, &item.Score, &item.Sentiment, &tagsRaw,
+			&url, &pubAt, &item.Score, &item.Sentiment, &tagsRaw, &implication,
 		); err != nil {
 			slog.Warn("news row scan failed", "err", err)
 			continue
 		}
 		item.URL = nullString(url)
 		item.PublishedAt = nullString(pubAt)
+		item.Implication = nullString(implication)
 		if tagsRaw.Valid && tagsRaw.String != "" {
 			item.Tags = strings.Split(tagsRaw.String, ",")
 		} else {

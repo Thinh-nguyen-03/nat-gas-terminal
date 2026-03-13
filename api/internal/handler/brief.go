@@ -27,7 +27,15 @@ type BriefResponse struct {
 // Brief handles GET /api/brief.
 // Returns the most recent market_brief from summary_outputs.
 func (h *Handler) Brief(w http.ResponseWriter, r *http.Request) {
-	row := h.DB.QueryRowContext(r.Context(), `
+	db, err := h.openDB()
+	if err != nil {
+		slog.Error("db open failed", "err", err)
+		writeError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	defer db.Close()
+
+	row := db.QueryRowContext(r.Context(), `
 		SELECT summary_date::VARCHAR, content
 		FROM summary_outputs
 		WHERE summary_type = 'market_brief'

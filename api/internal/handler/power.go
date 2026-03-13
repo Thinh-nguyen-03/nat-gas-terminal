@@ -34,7 +34,6 @@ type PowerHistoryPoint struct {
 
 // PowerResponse is the JSON body returned by GET /api/power.
 type PowerResponse struct {
-	// DataAvailable is false until collectors/iso_lmp.py (Feature 3) is running.
 	DataAvailable bool                `json:"data_available"`
 	Summary       PowerDemandSummary  `json:"summary"`
 	ISOs          []ISOPowerData      `json:"isos"`
@@ -52,12 +51,16 @@ var knownISOs = []ISOPowerData{
 }
 
 // Power handles GET /api/power.
-//
 // Returns real-time ISO LMP data and a composite power demand stress index.
-// Returns the ISO list with signal="unknown" until collectors/iso_lmp.py
-// (Feature 3) is running and populating facts_time_series with source_name='iso_lmp'.
+// ISOs have signal="unknown" until iso_lmp collector data is available.
 func (h *Handler) Power(w http.ResponseWriter, r *http.Request) {
-	db := h.DB
+	db, err := h.openDB()
+	if err != nil {
+		slog.Error("db open failed", "err", err)
+		writeError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	defer db.Close()
 
 	isos, hasLiveData, err := h.queryISOLMPs(r, db)
 	if err != nil {

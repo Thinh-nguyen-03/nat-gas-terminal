@@ -36,22 +36,25 @@ type BalanceResponse struct {
 }
 
 // Balance handles GET /api/balance.
-//
-// Returns the live supply/demand balance assembled from:
-//   - EIA supply data (dry gas production, Canada imports) — available now
-//   - EIA-930 power burn — available now
-//   - HDD-implied residential/commercial demand — available now (Feature 4)
-//   - LNG exports via AIS — stub until collectors/lng_vessels.py runs (Feature 2)
-//   - Pipeline EBB flows — stub until collectors/pipeline_ebb.py runs (Feature 1)
+// Returns the live supply/demand balance from EIA supply, EIA-930 power burn,
+// HDD-implied residential/commercial demand, and AIS-derived LNG exports.
 func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
-	supply, err := h.queryBalanceSupply(r)
+	db, err := h.openDB()
+	if err != nil {
+		slog.Error("db open failed", "err", err)
+		writeError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	defer db.Close()
+
+	supply, err := h.queryBalanceSupply(r, db)
 	if err != nil {
 		slog.Error("balance supply query failed", "err", err)
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
 	}
 
-	demand, err := h.queryBalanceDemand(r)
+	demand, err := h.queryBalanceDemand(r, db)
 	if err != nil {
 		slog.Error("balance demand query failed", "err", err)
 		writeError(w, http.StatusInternalServerError, "database error")
@@ -74,9 +77,7 @@ func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) queryBalanceSupply(r *http.Request) ([]BalanceComponent, error) {
-	db := h.DB
-
+func (h *Handler) queryBalanceSupply(r *http.Request, db *sql.DB) ([]BalanceComponent, error) {
 	// Pull the most recent value for each supply component from features_daily.
 	// The feature names match what EIASupplyCollector + features_supply write.
 	rows, err := db.QueryContext(r.Context(), `
@@ -136,12 +137,7 @@ func (h *Handler) queryBalanceSupply(r *http.Request) ([]BalanceComponent, error
 	return out, nil
 }
 
-func (h *Handler) queryBalanceDemand(r *http.Request) ([]BalanceComponent, error) {
-	db := h.DB
-
-	// Mix of real features (power burn, HDD-implied resi/comm) and stubs
-	// (LNG via AIS, pipeline exports via EBB) that will populate as more
-	// collectors come online.
+func (h *Handler) queryBalanceDemand(r *http.Request, db *sql.DB) ([]BalanceComponent, error) {
 	rows, err := db.QueryContext(r.Context(), `
 		SELECT feature_name, value, computed_at::VARCHAR
 		FROM (

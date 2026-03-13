@@ -37,7 +37,13 @@ type ScoreResponse struct {
 // It returns the most recent fundamental score and what-changed table from
 // summary_outputs, which the Python transform layer writes after each run.
 func (h *Handler) Score(w http.ResponseWriter, r *http.Request) {
-	db := h.DB
+	db, err := h.openDB()
+	if err != nil {
+		slog.Error("db open failed", "err", err)
+		writeError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	defer db.Close()
 
 	row := db.QueryRowContext(r.Context(), `
 		SELECT summary_date, content, generated_at
@@ -71,7 +77,6 @@ func (h *Handler) Score(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch what_changed for the same date.
 	var whatChanged []map[string]any
 	wcRow := db.QueryRowContext(r.Context(), `
 		SELECT content

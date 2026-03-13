@@ -30,7 +30,14 @@ type HealthResponse struct {
 // Returns database connectivity status and last-known status for every
 // registered collector.
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
-	db := h.DB
+	db, err := h.openDB()
+	if err != nil {
+		slog.Error("db open failed", "err", err)
+		writeError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	defer db.Close()
+
 	dbOk := db.PingContext(r.Context()) == nil
 
 	if !dbOk {

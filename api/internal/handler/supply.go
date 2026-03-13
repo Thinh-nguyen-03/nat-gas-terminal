@@ -48,7 +48,13 @@ var supplySeriesNames = []string{
 // Returns the latest value plus trailing 12-month history for each EIA supply
 // fundamental series.
 func (h *Handler) Supply(w http.ResponseWriter, r *http.Request) {
-	db := h.DB
+	db, err := h.openDB()
+	if err != nil {
+		slog.Error("db open failed", "err", err)
+		writeError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	defer db.Close()
 
 	args := make([]any, len(supplySeriesNames))
 	for i, n := range supplySeriesNames {
@@ -106,7 +112,6 @@ func (h *Handler) Supply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build response: first row per series is latest, rest is history.
 	series := make([]SupplySeries, 0, len(supplySeriesNames))
 	for _, name := range supplySeriesNames {
 		rr := grouped[name]

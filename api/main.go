@@ -39,7 +39,6 @@ import (
 )
 
 func main() {
-	// Structured JSON logging to stdout.
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
 	dbPath := env("DB_PATH", "../data/db/terminal.duckdb")
@@ -47,18 +46,19 @@ func main() {
 	internalKey := env("INTERNAL_API_KEY", "")
 	allowedOrigin := env("ALLOWED_ORIGIN", "http://localhost:3000")
 
-	database, err := appdb.Open(dbPath)
-	if err != nil {
+	// Validate DB path is reachable at startup with a quick open/close.
+	if probe, err := appdb.Open(dbPath); err != nil {
 		slog.Error("open db failed", "err", err)
 		os.Exit(1)
+	} else {
+		probe.Close()
 	}
-	defer database.Close()
 
 	broker := sse.NewBroker()
 	h := &handler.Handler{
 		Broker:      broker,
 		InternalKey: internalKey,
-		DB:          database,
+		DBPath:      dbPath,
 		SnapshotDir: filepath.Join(filepath.Dir(dbPath), ".."),
 		AIS:         handler.NewAISState(),
 	}
@@ -75,12 +75,6 @@ func main() {
 	mux.HandleFunc("GET /api/health",  h.Health)
 	mux.HandleFunc("GET /api/stream",  h.Stream)
 
-	// New panel endpoints (Features 1–7).
-	// /api/calendar — live from Day 1 (collectors/catalyst_calendar.py)
-	// /api/analogs  — stub; populates when transforms/features_analog.py runs (Feature 6)
-	// /api/balance  — partial now (EIA supply + HDD demand); full with Feature 1 EBB data
-	// /api/lng      — stub; populates when collectors/lng_vessels.py runs (Feature 2)
-	// /api/power    — stub; populates when collectors/iso_lmp.py runs (Feature 3)
 	mux.HandleFunc("GET /api/calendar", h.Calendar)
 	mux.HandleFunc("GET /api/analogs",  h.Analogs)
 	mux.HandleFunc("GET /api/balance",  h.Balance)
@@ -104,7 +98,6 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
-	// Start server in a goroutine so the main goroutine can wait for signals.
 	go func() {
 		slog.Info("server starting", "addr", srv.Addr, "db", dbPath)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -113,7 +106,6 @@ func main() {
 		}
 	}()
 
-	// Block until SIGINT or SIGTERM.
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit

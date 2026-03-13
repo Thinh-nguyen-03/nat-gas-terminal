@@ -46,7 +46,13 @@ type AnalogsResponse struct {
 // (written by transforms/features_analog.py, not yet implemented).
 // Returns an empty list until the analog transform is running.
 func (h *Handler) Analogs(w http.ResponseWriter, r *http.Request) {
-	db := h.DB
+	db, err := h.openDB()
+	if err != nil {
+		slog.Error("db open failed", "err", err)
+		writeError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	defer db.Close()
 
 	row := db.QueryRowContext(r.Context(), `
 		SELECT content, generated_at::VARCHAR
@@ -57,7 +63,7 @@ func (h *Handler) Analogs(w http.ResponseWriter, r *http.Request) {
 	`)
 
 	var contentJSON, generatedAt string
-	err := row.Scan(&contentJSON, &generatedAt)
+	err = row.Scan(&contentJSON, &generatedAt)
 	if err == sql.ErrNoRows {
 		// Transform not running yet — return empty response, not an error.
 		writeJSON(w, http.StatusOK, AnalogsResponse{
@@ -91,7 +97,12 @@ func (h *Handler) Analogs(w http.ResponseWriter, r *http.Request) {
 // AnalogsUpdatedAt returns the timestamp of the most recent analog computation,
 // or the zero time if no results exist yet. Used by the SSE broker.
 func (h *Handler) AnalogsUpdatedAt(r *http.Request) time.Time {
-	db := h.DB
+	db, err := h.openDB()
+	if err != nil {
+		slog.Error("db open failed", "err", err)
+		return time.Time{}
+	}
+	defer db.Close()
 
 	row := db.QueryRowContext(r.Context(), `
 		SELECT generated_at FROM summary_outputs
