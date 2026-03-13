@@ -21,11 +21,9 @@ import duckdb
 from collectors.base import CollectorBase
 from config.settings import DB_PATH
 
-# ---------------------------------------------------------------------------
 # FOMC decision dates (second day of each two-day meeting).
 # Update each December when the Fed publishes the following year's schedule.
 # Source: https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm
-# ---------------------------------------------------------------------------
 FOMC_DATES: list[date] = [
     # 2025
     date(2025, 1, 29), date(2025, 3, 19), date(2025, 5, 7),
@@ -47,10 +45,6 @@ _UPSERT_SQL = """
 """
 
 
-# ---------------------------------------------------------------------------
-# Calendar helpers
-# ---------------------------------------------------------------------------
-
 def _event_id(event_type: str, d: date, time_et: str | None) -> str:
     tag = time_et.replace(":", "") if time_et else "allday"
     return f"{event_type}_{d.isoformat()}_{tag}"
@@ -71,10 +65,6 @@ def _second_tuesday(year: int, month: int) -> date:
     offset = (1 - first.weekday()) % 7   # days to first Tuesday (weekday=1)
     return first + timedelta(days=offset + 7)
 
-
-# ---------------------------------------------------------------------------
-# Event generators
-# ---------------------------------------------------------------------------
 
 def _eia_storage_events(start: date, end: date) -> list[tuple]:
     """EIA weekly storage report — every Thursday 10:30 ET."""
@@ -160,10 +150,6 @@ def generate_events(window_days: int = _LOOKAHEAD_DAYS) -> list[tuple]:
         + _fomc_events(today, end)
     )
 
-
-# ---------------------------------------------------------------------------
-# Collector
-# ---------------------------------------------------------------------------
 
 class CatalystCalendarCollector(CollectorBase):
     source_name = "catalyst_calendar"

@@ -1,4 +1,8 @@
+import logging
 import os
+import time
+
+import duckdb
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -29,3 +33,28 @@ LOG_PATH     = os.path.join(os.path.dirname(__file__), "..", "logs", "collectors
 # After a successful write, POST here so the Go API broadcasts SSE to the frontend
 NOTIFY_API_URL   = os.environ.get("NOTIFY_API_URL", "http://localhost:8080/internal/notify")
 INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
+
+_settings_log = logging.getLogger("collectors")
+
+
+def connect_db(path: str = "") -> "duckdb.DuckDBPyConnection":
+    """Open DuckDB read-write with retry for transient file-lock conflicts.
+
+    The Go API holds DuckDB in READ_ONLY mode and releases the lock between
+    requests (SetMaxIdleConns=0). If Python tries to open a write connection
+    exactly during a Go query, DuckDB raises IOException "already open".
+    Retrying with exponential backoff hits the next idle window.
+    """
+    target = path or DB_PATH
+    for attempt in range(10):
+        try:
+            return duckdb.connect(target)
+        except duckdb.IOException as exc:
+            if "already open" not in str(exc) or attempt == 9:
+                raise
+            wait = 0.3 * (2 ** attempt)
+            _settings_log.debug(
+                "DuckDB locked, retry in %.1fs (attempt %d/10)", wait, attempt + 1
+            )
+            time.sleep(wait)
+    raise RuntimeError("unreachable")

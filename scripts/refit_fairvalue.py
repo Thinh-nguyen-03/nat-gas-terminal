@@ -42,10 +42,6 @@ _WINTER_MONTHS = frozenset({10, 11, 12, 1, 2, 3})
 _COEFF_PATH    = PROJECT_ROOT / "transforms" / "fairvalue_coefficients.json"
 
 
-# ---------------------------------------------------------------------------
-# Data assembly
-# ---------------------------------------------------------------------------
-
 def _build_training_set(
     conn,
     start: str,
@@ -193,10 +189,6 @@ def _build_training_set(
     return X_rows, y_rows, feature_names
 
 
-# ---------------------------------------------------------------------------
-# OLS fit
-# ---------------------------------------------------------------------------
-
 def _fit_ols(X_rows, y_rows, feature_names):
     try:
         from sklearn.linear_model import LinearRegression
@@ -245,10 +237,6 @@ def _print_diagnostics(result: dict, resids) -> None:
     print(f"  Mean absolute error: {float(np.mean(np.abs(resids))):.3f} USD/MMBtu")
     print()
 
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 def main() -> None:
     parser = argparse.ArgumentParser(

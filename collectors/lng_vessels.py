@@ -95,10 +95,6 @@ class LNGVesselsCollector(CollectorBase):
         return {"status": "ok", "vessels_seen": len(vessels), "rows_written": written}
 
 
-# ---------------------------------------------------------------------------
-# Async WebSocket collection
-# ---------------------------------------------------------------------------
-
 async def _collect_async(api_key: str) -> dict[int, dict]:
     """Open a WebSocket to AISstream.io and collect for _COLLECT_SECS seconds."""
     vessels: dict[int, dict] = {}
@@ -187,10 +183,6 @@ def _process_message(msg: dict, vessels: dict[int, dict]) -> None:
             v["ship_type"] = int(ship_type)
 
 
-# ---------------------------------------------------------------------------
-# Classification and DB write
-# ---------------------------------------------------------------------------
-
 def _classify_vessels(vessels: dict[int, dict]) -> dict[str, dict[str, int]]:
     """Return {terminal_name: {"loading": n, "anchored": n}}."""
     counts: dict[str, dict[str, int]] = {
@@ -259,10 +251,6 @@ def _write_counts(counts: dict[str, dict[str, int]]) -> int:
 
     return written
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def _is_lng_tanker(v: dict) -> bool:
     return v["ship_type"] in _LNG_VESSEL_TYPES or v["mmsi"] in _KNOWN_MMSIS

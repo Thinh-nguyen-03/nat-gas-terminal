@@ -5,7 +5,7 @@ import requests
 from datetime import datetime, timezone
 from abc import ABC, abstractmethod
 import duckdb
-from config.settings import RAW_DIR, DB_PATH, NOTIFY_API_URL, INTERNAL_API_KEY
+from config.settings import RAW_DIR, DB_PATH, NOTIFY_API_URL, INTERNAL_API_KEY, connect_db
 
 logger = logging.getLogger("collectors")
 
@@ -25,7 +25,7 @@ class CollectorBase(ABC):
         return path
 
     def record_health(self, status: str, error: str = None):
-        conn = duckdb.connect(DB_PATH)
+        conn = connect_db()
         now  = datetime.now(timezone.utc).isoformat()
         conn.execute("""
             INSERT INTO collector_health

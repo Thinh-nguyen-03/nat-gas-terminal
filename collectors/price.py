@@ -1,13 +1,12 @@
 import logging
 from datetime import datetime, timezone
 
-import duckdb
 import pandas as pd
 import yfinance as yf
 from fredapi import Fred
 
 from collectors.base import CollectorBase
-from config.settings import DB_PATH, FRED_API_KEY
+from config.settings import FRED_API_KEY, connect_db
 
 logger = logging.getLogger("collectors")
 
@@ -41,9 +40,20 @@ _INSERT_SQL = """
 
 
 def build_contract_tickers(n_months: int = CURVE_MONTHS) -> list[str]:
-    """Return the next n_months of NYMEX NG futures tickers in Yahoo Finance format."""
+    """Return the next n_months of NYMEX NG futures tickers in Yahoo Finance format.
+
+    NYMEX NG contracts expire ~3 business days before end of the month prior to
+    delivery (typically around the 22nd-26th). By the time the calendar month
+    rolls over, the current-month delivery contract is already expired. Use an
+    offset of +1 normally, or +2 after the ~25th (when next-month has also rolled).
+    """
     today = datetime.now(timezone.utc)
     year, month = today.year, today.month
+    offset = 2 if today.day >= 25 else 1
+    month += offset
+    if month > 12:
+        month -= 12
+        year += 1
     tickers = []
     for _ in range(n_months):
         tickers.append(f"NG{MONTH_CODES[month - 1]}{str(year)[2:]}.NYM")
@@ -58,35 +68,57 @@ class PriceCollector(CollectorBase):
     source_name = "price"
 
     def collect(self) -> dict:
-        records_written = 0
-        conn = duckdb.connect(DB_PATH)
         now_str = datetime.now(timezone.utc).isoformat()
 
+        # Phase 1: fetch all data (no DB held during HTTP I/O)
+        front_rows, front_raw = self._fetch_front_month(now_str)
+        curve_rows, curve_snapshot = self._fetch_forward_curve(now_str)
+        fred_rows = self._fetch_fred_spot(now_str)
+
+        # Phase 2: write all rows in one short DB session
+        all_rows = front_rows + curve_rows + fred_rows
+        conn = connect_db()
         try:
-            records_written += self._collect_front_month(conn, now_str)
-            records_written += self._collect_forward_curve(conn, now_str)
-            records_written += self._collect_fred_spot(conn, now_str)
+            for row in all_rows:
+                conn.execute(_INSERT_SQL, row)
         finally:
             conn.close()
 
-        return {"status": "ok", "records_written": records_written}
+        if front_raw:
+            self.save_raw(front_raw, subdir="price")
+        self.save_raw(curve_snapshot, subdir="price")
 
-    def _collect_front_month(self, conn, now_str: str) -> int:
-        """Collect 90 days of OHLCV for the front-month NG=F contract."""
-        # yfinance >=1.0 returns a MultiIndex DataFrame from download()
-        hist = yf.download("NG=F", period=HISTORY_PERIOD, interval="1d",
-                           progress=False, auto_adjust=True)
+        return {"status": "ok", "records_written": len(all_rows)}
+
+    def _fetch_front_month(self, now_str: str) -> tuple[list[list], str]:
+        """Fetch 90 days of OHLCV for the current front-month contract.
+
+        Uses the dynamically computed front-month ticker (e.g. NGJ26.NYM) instead
+        of NG=F so it rolls automatically when the prompt-month contract expires.
+        Tries up to 3 forward contracts in case the first is expired or illiquid.
+        """
+        candidates = build_contract_tickers(3)
+        hist = pd.DataFrame()
+        ticker_used = ""
+        for ticker in candidates:
+            h = yf.download(ticker, period=HISTORY_PERIOD, interval="1d",
+                            progress=False, auto_adjust=True)
+            if not h.empty:
+                hist = h
+                ticker_used = ticker
+                break
+            logger.warning("[price] front-month %s returned no data, trying next", ticker)
+
         if hist.empty:
-            logger.warning("[price] yfinance returned no data for NG=F")
-            return 0
+            logger.warning("[price] no front-month data found for any candidate: %s", candidates)
+            return [], ""
 
-        # Flatten MultiIndex columns: (Price, Ticker) -> Price
+        logger.info("[price] front-month using %s", ticker_used)
         if isinstance(hist.columns, pd.MultiIndex):
             hist.columns = hist.columns.get_level_values(0)
 
-        self.save_raw(hist.reset_index().to_json(), subdir="price")
-
-        count = 0
+        raw_json = hist.reset_index().to_json()
+        rows = []
         for idx, row in hist.iterrows():
             ts = idx
             if hasattr(ts, "tz_localize"):
@@ -97,26 +129,17 @@ class PriceCollector(CollectorBase):
                 if val is None or (isinstance(val, float) and val != val):
                     continue
                 unit = "contracts" if field == "Volume" else "USD/MMBtu"
-                conn.execute(_INSERT_SQL, [
-                    "yfinance",
-                    f"ng_front_{field.lower()}",
-                    obs_time,
-                    now_str,
-                    float(val),
-                    unit,
-                    "daily",
-                ])
-                count += 1
-        return count
+                rows.append(["yfinance", f"ng_front_{field.lower()}", obs_time,
+                              now_str, float(val), unit, "daily"])
+        return rows, raw_json
 
-    def _collect_forward_curve(self, conn, now_str: str) -> int:
+    def _fetch_forward_curve(self, now_str: str) -> tuple[list[list], dict]:
         """Snapshot the 13-month forward curve from Yahoo Finance."""
         obs_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         tickers = build_contract_tickers()
         curve_snapshot: dict[str, float] = {}
-        count = 0
+        rows = []
 
-        # Batch download is more reliable than per-ticker fast_info
         data = yf.download(tickers, period="5d", interval="1d",
                            progress=False, auto_adjust=True)
         if not data.empty and "Close" in data.columns.get_level_values(0):
@@ -128,28 +151,18 @@ class PriceCollector(CollectorBase):
                     if price is None or (isinstance(price, float) and price != price):
                         continue
                     series_name = f"ng_curve_{ticker_str.replace('.NYM', '').lower()}"
-                    conn.execute(_INSERT_SQL, [
-                        "yfinance",
-                        series_name,
-                        obs_time,
-                        now_str,
-                        float(price),
-                        "USD/MMBtu",
-                        "intraday",
-                    ])
+                    rows.append(["yfinance", series_name, obs_time, now_str,
+                                 float(price), "USD/MMBtu", "intraday"])
                     curve_snapshot[ticker_str] = float(price)
-                    count += 1
                 except Exception as e:
                     logger.warning("[price] curve contract %s failed: %s", ticker_str, e)
-                    continue
 
-        self.save_raw(curve_snapshot, subdir="price")
-        return count
+        return rows, curve_snapshot
 
-    def _collect_fred_spot(self, conn, now_str: str) -> int:
-        """Collect FRED spot price series (Henry Hub + heating oil)."""
+    def _fetch_fred_spot(self, now_str: str) -> list[list]:
+        """Fetch FRED spot price series (Henry Hub + heating oil)."""
         fred = Fred(api_key=FRED_API_KEY)
-        count = 0
+        rows = []
         for fred_id, (series_name, unit) in FRED_SERIES.items():
             try:
                 series = fred.get_series(fred_id, observation_start=FRED_START)
@@ -157,10 +170,8 @@ class PriceCollector(CollectorBase):
                     if value != value:  # NaN
                         continue
                     obs_time = date.strftime("%Y-%m-%dT00:00:00Z")
-                    conn.execute(_INSERT_SQL, [
-                        "fred", series_name, obs_time, now_str, float(value), unit, "daily",
-                    ])
-                    count += 1
+                    rows.append(["fred", series_name, obs_time, now_str,
+                                 float(value), unit, "daily"])
             except Exception as e:
                 logger.warning("[price] FRED series %s failed: %s", fred_id, e)
-        return count
+        return rows

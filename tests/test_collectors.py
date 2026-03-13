@@ -13,10 +13,6 @@ import duckdb
 import pytest
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _load_fixture(name: str) -> dict:
     fixture_path = os.path.join(os.path.dirname(__file__), "fixtures", name)
     with open(fixture_path) as f:
@@ -39,10 +35,6 @@ def _count_rows(db_path: str, source_name: str) -> int:
     conn.close()
     return result
 
-
-# ---------------------------------------------------------------------------
-# EIA Storage
-# ---------------------------------------------------------------------------
 
 class TestEIAStorageCollector:
 
@@ -113,10 +105,6 @@ class TestEIAStorageCollector:
         assert result["records_written"] == 6
 
 
-# ---------------------------------------------------------------------------
-# Power Burn (EIA-930)
-# ---------------------------------------------------------------------------
-
 class TestPowerBurnCollector:
 
     def test_records_written_match_data_rows(self, test_db):
@@ -175,10 +163,6 @@ class TestPowerBurnCollector:
         )
 
 
-# ---------------------------------------------------------------------------
-# EIA Supply
-# ---------------------------------------------------------------------------
-
 class TestEIASupplyCollector:
 
     def test_monthly_period_padded_to_first_of_month(self, test_db):
@@ -228,10 +212,6 @@ class TestEIASupplyCollector:
         assert result["status"] == "ok"
         assert result["records_written"] > 0
 
-
-# ---------------------------------------------------------------------------
-# Weather
-# ---------------------------------------------------------------------------
 
 class TestWeatherCollector:
 
@@ -309,10 +289,6 @@ class TestWeatherCollector:
         json_files = [f for f in os.listdir(archive_today) if f.endswith("_forecast.json")]
         assert len(json_files) == 8, "One archive file expected per city"
 
-
-# ---------------------------------------------------------------------------
-# EIA Storage Stats (5-year avg / max / min from ngsstats.xls)
-# ---------------------------------------------------------------------------
 
 class TestEIAStorageStatsCollector:
 

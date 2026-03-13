@@ -196,7 +196,8 @@ def initialize_schema():
             fetched_at   TIMESTAMPTZ NOT NULL,
             score        FLOAT NOT NULL DEFAULT 0,
             sentiment    VARCHAR NOT NULL DEFAULT 'neutral',
-            tags         VARCHAR
+            tags         VARCHAR,
+            implication  VARCHAR
         )
         """,
 

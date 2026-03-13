@@ -13,10 +13,6 @@ import duckdb
 import pytest
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _seed_storage(db_path: str, rows: list[tuple]) -> None:
     """Insert (obs_date_str, value) tuples into facts_time_series as eia_storage/total."""
     conn = duckdb.connect(db_path)
@@ -65,10 +61,6 @@ def _get_feature(db_path: str, feature_name: str, for_date: date = None) -> dict
     return {"value": row[0], "interpretation": row[1], "confidence": row[2]}
 
 
-# ---------------------------------------------------------------------------
-# Storage interpretation functions (pure — no DB required)
-# ---------------------------------------------------------------------------
-
 class TestStorageInterpretation:
 
     def test_interpret_deficit_thresholds(self):
@@ -95,10 +87,6 @@ class TestStorageInterpretation:
         assert _interpret_eos(3200, summer) == "very_bullish"   # below 3500 low
         assert _interpret_eos(4000, summer) == "bearish"        # above 3800 high
 
-
-# ---------------------------------------------------------------------------
-# Storage feature computation (requires seeded DB)
-# ---------------------------------------------------------------------------
 
 class TestComputeStorageFeatures:
 
@@ -173,10 +161,6 @@ class TestComputeStorageFeatures:
         assert count == 0
 
 
-# ---------------------------------------------------------------------------
-# COT interpretation functions (pure — no DB required)
-# ---------------------------------------------------------------------------
-
 class TestCOTInterpretation:
 
     def test_contrarian_crowded_short_is_bullish(self):
@@ -188,10 +172,6 @@ class TestCOTInterpretation:
         assert _interpret_cot(25)  == "bearish"
         assert _interpret_cot(None) == "unknown"
 
-
-# ---------------------------------------------------------------------------
-# COT feature computation (requires seeded DB)
-# ---------------------------------------------------------------------------
 
 class TestComputeCOTFeatures:
 
@@ -226,10 +206,6 @@ class TestComputeCOTFeatures:
         assert pct["interpretation"] == "bearish"
 
 
-# ---------------------------------------------------------------------------
-# Price interpretation functions (pure — no DB required)
-# ---------------------------------------------------------------------------
-
 class TestPriceInterpretation:
 
     def test_price_interp_boundaries(self):
@@ -247,10 +223,6 @@ class TestPriceInterpretation:
         assert _pct(100.0, 0.0)   is None
         assert _pct(None,  100.0) is None
 
-
-# ---------------------------------------------------------------------------
-# Weather interpretation functions (pure — no DB required)
-# ---------------------------------------------------------------------------
 
 class TestWeatherInterpretation:
 
@@ -270,10 +242,6 @@ class TestWeatherInterpretation:
         assert _interpret_revision(-2.0) == "mildly_bearish"
         assert _interpret_revision(-6.0) == "bearish"
 
-
-# ---------------------------------------------------------------------------
-# Fundamental score
-# ---------------------------------------------------------------------------
 
 class TestFundamentalScore:
 

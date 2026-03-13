@@ -35,9 +35,6 @@ from pathlib import Path
 import duckdb
 import requests
 
-# ---------------------------------------------------------------------------
-# Bootstrap path so we can import project modules when run as a script
-# ---------------------------------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -58,10 +55,6 @@ _UPSERT_SQL = """
     ON CONFLICT (source_name, series_name, region, observation_time)
     DO UPDATE SET value = excluded.value, ingest_time = excluded.ingest_time
 """
-
-# ---------------------------------------------------------------------------
-# EIA v2 storage backfill
-# ---------------------------------------------------------------------------
 
 # Same series IDs as the live EIAStorageCollector — ensures backfilled rows
 # are written with the same source_name/series_name/region keys.
@@ -118,10 +111,6 @@ def backfill_eia_storage(conn, start: str = "2010-01-01") -> None:
 
     logger.info("EIA storage backfill complete: %d rows total", total_rows)
 
-
-# ---------------------------------------------------------------------------
-# CFTC COT backfill
-# ---------------------------------------------------------------------------
 
 _CFTC_ZIP_URL = "https://www.cftc.gov/files/dea/history/fut_disagg_txt_{year}.zip"
 
@@ -248,10 +237,6 @@ def backfill_cftc_cot(conn, start_year: int = 2010) -> None:
     logger.info("CFTC COT backfill complete: %d rows total", total_rows)
 
 
-# ---------------------------------------------------------------------------
-# Price history backfill  (yfinance NG=F + FRED spot)
-# ---------------------------------------------------------------------------
-
 # Same series names as live PriceCollector — backfilled rows are
 # indistinguishable from live data so Feature 9 training can use both.
 _FRED_PRICE_SERIES: dict[str, tuple[str, str]] = {
@@ -336,10 +321,6 @@ def backfill_prices(conn, start: str = "2010-01-01") -> None:
 
     logger.info("Price backfill complete: %d rows total", total_rows)
 
-
-# ---------------------------------------------------------------------------
-# NOAA CDO historical HDD backfill
-# ---------------------------------------------------------------------------
 
 # GHCND station IDs matching the 8 cities in collectors/weather.py.
 # Verified against NOAA station listings for the nearest climate-grade station
@@ -460,10 +441,6 @@ def backfill_noaa_hdd(conn, start_year: int = 2010) -> None:
 
     logger.info("NOAA HDD backfill complete: %d daily rows written", total_rows)
 
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

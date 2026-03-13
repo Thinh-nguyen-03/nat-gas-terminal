@@ -30,10 +30,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("bootstrap")
 
-# ---------------------------------------------------------------------------
-# Step 1 — Historical backfill
-# ---------------------------------------------------------------------------
-
 def step_backfill(start: str, start_year: int) -> None:
     import duckdb
     from config.settings import DB_PATH
@@ -57,10 +53,6 @@ def step_backfill(start: str, start_year: int) -> None:
 
     logger.info("Step 1 complete.")
 
-
-# ---------------------------------------------------------------------------
-# Step 2 — Run live collectors once (current snapshots only)
-# ---------------------------------------------------------------------------
 
 def step_live_collectors() -> None:
     logger.info("STEP 2 — Live collectors (current snapshots)")
@@ -95,10 +87,6 @@ def step_live_collectors() -> None:
 
     logger.info("Step 2 complete.")
 
-
-# ---------------------------------------------------------------------------
-# Step 3 — Feature transforms in dependency order
-# ---------------------------------------------------------------------------
 
 def step_transforms() -> None:
     logger.info("STEP 3 — Feature transforms")
@@ -140,10 +128,6 @@ def step_transforms() -> None:
 
     logger.info("Step 3 complete.")
 
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

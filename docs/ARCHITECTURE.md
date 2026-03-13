@@ -74,6 +74,7 @@ Each file handles one data source. All collectors inherit `CollectorBase` which 
 | `power_burn.py` | EIA-930 | Hourly at :05 | Gas-fired generation (MWh) for 8 balancing authorities, 72h lookback |
 | `cftc.py` | CFTC disaggregated COT | Friday 4pm | Managed money long/short, producer, swap, open interest |
 | `rig_count.py` | Baker Hughes XLSB | Friday 2pm | U.S. natural gas rig count, 104 weeks; page-scraped UUID URL |
+| `news_wire.py` | 6 RSS feeds + 4 Google News queries | Every 15 min | Nat-gas relevant headlines scored by Gemini AI (relevance, sentiment, price implication); irrelevant articles dropped before storage |
 
 ### transforms/
 
@@ -116,6 +117,7 @@ APScheduler `BlockingScheduler` with US/Eastern timezone. Runs as a standalone p
 | `feat_cpc` | :22 | cpc_outlook |
 | `feat_cot` | :25 | cftc |
 | `summary` | :30 | all features |
+| `news_wire` | :00/:15/:30/:45 | independent; no feature dependency |
 
 ### api/ (Go)
 
@@ -131,6 +133,8 @@ Read-only HTTP server serving JSON to the Next.js frontend. Opens DuckDB with `a
 | `GET /api/weather` | 7-day HDD summary, city breakdown, CPC 6-10/8-14 day outlook | 90 days weighted HDD/CDD |
 | `GET /api/supply` | Dry gas production, LNG exports, power burn, Mexico pipeline, total imports, total pipeline exports, gas rig count | 12 months per EIA series; 104 weeks rig count |
 | `GET /api/cot` | MM net positioning, OI | 52 weeks |
+| `GET /api/news` | AI-scored headlines with sentiment and price implication | Last 48h, top 30 by score |
+| `GET /api/brief` | Gemini-generated market brief: outlook, 3 drivers, tail risk | Latest available |
 | `GET /api/health` | DB reachability, per-collector last status | — |
 | `GET /api/stream` | SSE event stream | — |
 | `POST /internal/notify` | Python → Go push; triggers SSE fan-out | — |
@@ -178,6 +182,184 @@ One row per collector, updated after every run. Used by the Go API health endpoi
 **Observation time as TIMESTAMPTZ**: All times stored as timezone-aware. Weekly EIA data stored as `YYYY-MM-DDT00:00:00Z` (date-only periods). Hourly EIA-930 data stored as `YYYY-MM-DDTHH:00:00Z`. This allows consistent ordering and range queries without ambiguity.
 
 **SSE over WebSocket**: Simpler server implementation, works through HTTP/1.1 proxies and load balancers without upgrade negotiation, sufficient for once-per-collection-run push cadence.
+
+---
+
+## News Wire
+
+### Overview
+
+The news wire collects headlines from 10 RSS/query sources, runs every new article through a Gemini AI scoring pass, and stores only relevant articles with a machine-generated one-line price implication. Irrelevant articles are dropped entirely — only nat-gas relevant news enters the DB.
+
+---
+
+### Sources
+
+**Direct RSS feeds** (specific publishers):
+
+| # | Name | URL | Update cadence | Why included |
+|---|------|-----|----------------|--------------|
+| 1 | EIA Today in Energy | `https://www.eia.gov/rss/todayinenergy.xml` | Daily | EIA analysis articles on nat-gas markets |
+| 2 | EIA Press Releases | `https://www.eia.gov/rss/press_rss.xml` | As released | Official announcements: STEO, outlook revisions |
+| 3 | EIA What's New | `https://www.eia.gov/about/new/WNtest3.php` | As released | Data product releases: STEO, Weekly NG Storage Supplement |
+| 4 | OilPrice.com | `https://oilprice.com/rss/main` | Frequent (~15/day) | Geopolitical + market commentary |
+| 5 | Rigzone | `https://www.rigzone.com/news/rss/rigzone_latest.aspx` | Frequent (~20/day) | Operational/industry: pipeline outages, terminal updates |
+| 6 | Natural Gas Intel | `https://www.naturalgasintel.com/feed/` | Frequent (~10/day) | Nat-gas specific, highest signal density |
+
+**Sources tested and excluded:**
+- EIA Gasoline & Diesel Update — weekly retail pump price data, no nat-gas content
+- EIA Heating Oil & Propane Update — weekly seasonal price data, no nat-gas content
+- LNG World News — RSS feed is stale (articles from 2015–2017)
+- Reuters, AP News — connection blocked
+- MarketWatch — HTTP 403
+- GlobeNewswire — feed returns 0 items
+
+**Google News query feeds** (aggregates Reuters, FT, WSJ, Bloomberg excerpts, NGI, etc.):
+
+| # | Query | URL | Why included |
+|---|-------|-----|--------------|
+| 7 | `natural gas price` | `https://news.google.com/rss/search?q=natural+gas+price&hl=en-US&gl=US&ceid=US:en` | Broad price coverage from premium sources |
+| 8 | `LNG exports US` | `https://news.google.com/rss/search?q=LNG+exports+US&hl=en-US&gl=US&ceid=US:en` | Export market, cargo flows, DOE approvals |
+| 9 | `Henry Hub` | `https://news.google.com/rss/search?q=Henry+Hub&hl=en-US&gl=US&ceid=US:en` | Spot price moves and analyst commentary |
+| 10 | `EIA natural gas storage` | `https://news.google.com/rss/search?q=EIA+natural+gas+storage&hl=en-US&gl=US&ceid=US:en` | Weekly storage report coverage and analysis |
+
+Google News queries are the primary solution for accessing paywalled sources (Reuters, FT, WSJ, Bloomberg) — Google aggregates their headlines and links, which we can surface without a subscription.
+
+---
+
+### Pipeline Architecture
+
+```
+[10 RSS/query feeds]
+        |
+        v
+  fetch + parse XML          -- requests.get per feed, parse <item>/<entry> tags
+        |
+        v
+  deduplicate vs DB          -- SHA1(url)[:16] = item_id; skip IDs already in news_items
+        |
+        v
+  batch new articles         -- group into batches of ≤20 (Gemini context limit)
+        |
+        v
+  Gemini AI scoring          -- single call per batch, structured JSON output:
+        |                         { relevant: bool, sentiment: bullish|bearish|neutral,
+        |                           score: 0–100, implication: "one sentence on price impact" }
+        v
+  drop irrelevant            -- relevant: false → discard entirely (no DB write)
+        |
+        v
+  upsert to news_items       -- store only scored, relevant articles
+        |
+        v
+  POST /internal/notify      -- trigger SSE fan-out → NewsPanel re-fetches
+```
+
+**Fallback:** if `GEMINI_API_KEY` is unset or the API call fails, articles are stored with `score=0`, `sentiment='neutral'`, `implication=null` and the panel still shows headlines.
+
+**Deduplication:** each article's SHA1(url) hash is checked against `news_items` before batching. Articles already stored are skipped — we never re-score or re-store.
+
+**Batch size:** 20 articles per Gemini call. At ~100 new articles/run across all feeds, this means ~5 API calls per 15-min scheduler tick. Well within free-tier quota (1,500 req/day).
+
+---
+
+### Schema Changes
+
+**Existing `news_items` table — add one column:**
+
+```sql
+ALTER TABLE news_items ADD COLUMN IF NOT EXISTS implication VARCHAR;
+```
+
+Full schema after change:
+
+```
+news_items
+  id            VARCHAR PRIMARY KEY    -- SHA1(url)[:16]
+  source        VARCHAR                -- feed name (e.g. "EIA", "Rigzone", "GNews:Henry Hub")
+  title         VARCHAR
+  url           VARCHAR
+  published_at  TIMESTAMPTZ
+  fetched_at    TIMESTAMPTZ
+  score         FLOAT                  -- 0–100 AI relevance/impact score
+  sentiment     VARCHAR                -- 'bullish' | 'bearish' | 'neutral'
+  tags          VARCHAR                -- comma-separated matched keywords (legacy; kept for compat)
+  implication   VARCHAR                -- AI one-liner: "bearish — warm 10-day outlook cuts storage draw expectations"
+```
+
+---
+
+### API Changes
+
+**`GET /api/news`** — Go handler `api/internal/handler/news.go`
+
+Add `implication` to the JSON response per item. No other changes.
+
+Response shape:
+```json
+{
+  "items": [
+    {
+      "id": "abc123",
+      "source": "Natural Gas Intel",
+      "title": "Henry Hub Strength Highlights Weakness Across Midwest Gas Hubs",
+      "url": "https://...",
+      "published_at": "2026-03-12T14:30:00Z",
+      "score": 82,
+      "sentiment": "bullish",
+      "implication": "Bullish — strong Henry Hub demand pulling basis differentials tighter across producing regions."
+    }
+  ],
+  "as_of": "2026-03-12T14:45:00Z"
+}
+```
+
+---
+
+### UI Changes
+
+**`ui/components/panels/NewsPanel.tsx`**
+
+- Add `implication?: string` to the `NewsItem` TypeScript type
+- Render implication as a small italic line under each headline in the feed list
+- Color-code: bullish → green `#4ade80`, bearish → red `#f87171`, neutral → muted `#64748b`
+
+---
+
+### Scheduler Changes
+
+**`scheduler/jobs.py`** — `news_wire` job
+
+- Currently: runs every 15 min, single EIA feed
+- After: same 15-min cadence, all 10 feeds, Gemini batch scoring inserted between fetch and store
+
+| Job | Schedule | Notes |
+|-----|----------|-------|
+| `news_wire` | Every 15 min at :00,:15,:30,:45 | Fetch all 10 feeds, deduplicate, batch AI score, upsert |
+
+---
+
+### Files
+
+| File | Role |
+|------|------|
+| `collectors/news_wire.py` | Fetches all 10 feeds, deduplicates, batches to Gemini, upserts relevant articles |
+| `db/schema.py` | `news_items` table definition including `implication VARCHAR` |
+| `api/internal/handler/news.go` | `GET /api/news` — returns last 48h of scored headlines with `implication` |
+| `ui/lib/types.ts` | `NewsItem` interface including `implication?: string \| null` |
+| `ui/components/panels/NewsPanel.tsx` | Renders headline + italic implication line, color-coded by sentiment |
+
+---
+
+### Design Decisions
+
+**Why replace keywords with Gemini:** Keyword matching cannot distinguish "Russia restored gas supplies" (bearish) from "Russia cut gas supplies" (bullish). Context and negation require LLM-level understanding. Gemini processes the full title + description snippet and returns a structured score + implication in one call.
+
+**Why Google News queries instead of BBC Business:** BBC Business (37 items/run) has ~85% irrelevance rate. Google News queries return 100 items per query that are already on-topic — the AI filter sees pre-filtered signal rather than general business noise. This also surfaces Reuters, FT, WSJ, Bloomberg headlines that are otherwise blocked or paywalled.
+
+**Why batch 20 at a time:** Gemini `gemini-2.5-flash-lite` context window is large but prompt engineering for structured JSON output is more reliable with shorter batches. 20 articles keeps the prompt to ~3,000 tokens and the output deterministic.
+
+**Why store only relevant articles:** Storing irrelevant articles wastes DB space and pollutes the NewsPanel feed with noise. The Gemini `relevant: false` flag is the hard gate — if it's not relevant to nat-gas pricing, it doesn't exist in the system.
 
 ---
 

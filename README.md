@@ -7,6 +7,8 @@ A self-hosted trading intelligence terminal for swing and position trading of He
 - Collects weekly EIA storage, supply, and price data; NWS weather forecasts; CFTC COT positioning; and EIA-930 power burn
 - Computes a composite fundamental score from -100 (max bearish) to +100 (max bullish)
 - Tracks daily changes and flags when interpretations shift
+- Monitors 10 RSS/news feeds every 15 minutes; scores each headline with Gemini AI for relevance, sentiment, and a one-line price implication
+- Generates a Gemini-powered market brief (outlook, key drivers, tail risk) on demand
 - Serves data via a Go REST/SSE API to a Next.js dashboard
 
 ## Architecture
@@ -24,7 +26,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full system design.
 - Python 3.11+
 - Go 1.22+
 - Node.js 20+ (for the frontend)
-- API keys: EIA Open Data, FRED
+- API keys: EIA Open Data, FRED (required); Gemini (optional, for news scoring and market brief)
 
 ## Setup
 
@@ -45,6 +47,9 @@ cp .env.example .env
 ```
 EIA_API_KEY=your_key_here
 FRED_API_KEY=your_key_here
+GEMINI_API_KEY=your_key_here     # optional — enables AI news scoring and market brief
+GEMINI_MODEL=gemini-2.5-flash-lite  # optional, this is the default
+AISSTREAM_API_KEY=your_key_here  # optional — enables live AIS vessel tracking
 DATA_BASE_DIR=./data             # optional, defaults to ./data
 NOTIFY_API_URL=http://localhost:8080/internal/notify  # optional
 INTERNAL_API_KEY=                # optional
@@ -71,6 +76,7 @@ python -c "from collectors.price import PriceCollector; print(PriceCollector().r
 python -c "from collectors.weather import WeatherCollector; print(WeatherCollector().run())"
 python -c "from collectors.power_burn import PowerBurnCollector; print(PowerBurnCollector().run())"
 python -c "from collectors.cftc import CFTCCollector; print(CFTCCollector().run())"
+python -c "from collectors.news_wire import NewsWireCollector; print(NewsWireCollector().run())"
 ```
 
 Then compute features:
@@ -107,6 +113,7 @@ Key schedules (all US/Eastern):
 - EIA storage stats: Thursday 11:00am
 - EIA supply: daily 8:00am
 - CFTC COT: Friday 4:00pm
+- News wire: every 15 min (all hours)
 - Feature transforms: every hour at :10/:15/:20/:25
 - Summary: every hour at :30
 
@@ -123,7 +130,7 @@ go run ./main.go
 
 The API opens DuckDB in READ_ONLY mode — it never blocks the Python writer. Set `INTERNAL_API_KEY` to a random secret in production; without it any caller can trigger SSE broadcasts.
 
-Available endpoints: `/api/score`, `/api/storage`, `/api/price`, `/api/weather`, `/api/supply`, `/api/cot`, `/api/health`, `/api/stream` (SSE).
+Available endpoints: `/api/score`, `/api/storage`, `/api/price`, `/api/weather`, `/api/supply`, `/api/cot`, `/api/news`, `/api/brief`, `/api/health`, `/api/stream` (SSE).
 
 ## Run Tests
 

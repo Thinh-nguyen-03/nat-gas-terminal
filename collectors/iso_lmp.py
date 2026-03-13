@@ -34,7 +34,7 @@ import duckdb
 import requests
 
 from collectors.base import CollectorBase
-from config.settings import DB_PATH
+from config.settings import DB_PATH, connect_db
 
 logger = logging.getLogger("collectors")
 
@@ -52,13 +52,17 @@ class ISOLMPCollector(CollectorBase):
     source_name = "iso_lmp"
 
     def collect(self) -> dict:
-        conn = duckdb.connect(DB_PATH)
         now = datetime.now(timezone.utc)
         now_str = now.isoformat()
-        written = 0
 
+        # Fetch all LMP data over HTTP before opening the DB so we don't
+        # hold a write lock during network I/O.
+        results = _fetch_all(now)
+
+        conn = connect_db()
+        written = 0
         try:
-            for iso, lmp, obs_time in _fetch_all(now):
+            for iso, lmp, obs_time in results:
                 conn.execute(_UPSERT_SQL, [iso, obs_time, now_str, lmp])
                 written += 1
                 logger.info("[iso_lmp] %s: %.2f USD/MWh @ %s", iso, lmp, obs_time)
@@ -68,9 +72,6 @@ class ISOLMPCollector(CollectorBase):
         return {"status": "ok", "isos_written": written}
 
 
-# ---------------------------------------------------------------------------
-# Fetchers — one per free-API ISO
-# ---------------------------------------------------------------------------
 
 def _fetch_all(now: datetime) -> list[tuple[str, float, str]]:
     """Return list of (iso, lmp_usd_mwh, obs_time_iso8601) tuples."""
@@ -104,7 +105,7 @@ def _fetch_nyiso(now: datetime) -> tuple[str, float, str] | None:
     if len(lines) < 2:
         return None
 
-    header = [h.strip() for h in lines[0].split(",")]
+    header = [h.strip().strip('"') for h in lines[0].split(",")]
 
     def _col(*candidates: str) -> int | None:
         for c in candidates:
@@ -127,16 +128,16 @@ def _fetch_nyiso(now: datetime) -> tuple[str, float, str] | None:
     best_ts = None
     best_lmp = None
     for line in lines[1:]:
-        parts = line.split(",")
+        parts = [p.strip().strip('"') for p in line.split(",")]
         if len(parts) <= max(name_idx, lmp_idx, ts_idx):
             continue
-        if parts[name_idx].strip().upper() not in _NYC_NAMES and parts[name_idx].strip() not in _NYC_NAMES:
+        if parts[name_idx].upper() not in _NYC_NAMES and parts[name_idx] not in _NYC_NAMES:
             continue
         try:
-            lmp = float(parts[lmp_idx].strip())
+            lmp = float(parts[lmp_idx])
         except ValueError:
             continue
-        ts_raw = parts[ts_idx].strip()  # e.g. "03/08/2026 14:55:00"
+        ts_raw = parts[ts_idx]  # e.g. "03/08/2026 14:55:00"
         try:
             dt = datetime.strptime(ts_raw, "%m/%d/%Y %H:%M:%S").replace(tzinfo=timezone.utc)
         except ValueError:
@@ -283,9 +284,6 @@ def _fetch_caiso(now: datetime) -> tuple[str, float, str] | None:
     return ("CAISO", best_lmp, best_ts.isoformat())
 
 
-# ---------------------------------------------------------------------------
-# PJM — DataMiner2 API (requires PJM_API_KEY)
-# ---------------------------------------------------------------------------
 
 def _fetch_pjm(now: datetime) -> tuple[str, float, str] | None:
     from config.settings import PJM_API_KEY
@@ -328,10 +326,6 @@ def _fetch_pjm(now: datetime) -> tuple[str, float, str] | None:
 
     return ("PJM", lmp, obs_time)
 
-
-# ---------------------------------------------------------------------------
-# ERCOT — public API (requires ERCOT_SUBSCRIPTION_KEY + username/password)
-# ---------------------------------------------------------------------------
 
 # Azure B2C ERCOT public app — client_id is a published constant, not a secret
 _ERCOT_CLIENT_ID   = "fec253ea-0d06-4272-a5e6-b478baeecd70"
@@ -417,9 +411,6 @@ def _fetch_ercot(now: datetime) -> tuple[str, float, str] | None:
     return ("ERCOT", price, obs_time)
 
 
-# ---------------------------------------------------------------------------
-# ISO-NE — webservices API (requires ISO_NE_USERNAME + ISO_NE_PASSWORD)
-# ---------------------------------------------------------------------------
 
 def _fetch_isone(now: datetime) -> tuple[str, float, str] | None:
     from config.settings import ISO_NE_USERNAME, ISO_NE_PASSWORD
