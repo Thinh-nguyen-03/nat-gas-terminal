@@ -8,6 +8,8 @@ All times are US/Eastern. Cron triggers fire in that timezone unless noted.
 
 import logging
 import logging.config
+import threading
+from datetime import datetime, timezone
 
 import pytz
 import requests
@@ -37,7 +39,7 @@ from transforms.features_storage import compute_storage_features
 from transforms.features_summary import save_summary
 from transforms.market_brief     import compute_market_brief
 from transforms.features_weather import compute_weather_features
-from config.settings import LOG_PATH, NOTIFY_API_URL, INTERNAL_API_KEY
+from config.settings import LOG_PATH, NOTIFY_API_URL, INTERNAL_API_KEY, connect_db
 
 ET = pytz.timezone("US/Eastern")
 
@@ -67,6 +69,150 @@ def _notify_after(fn, source: str):
     return wrapper
 
 
+# ---------------------------------------------------------------------------
+# Data freshness watchdog — startup gap check + periodic monitor
+# ---------------------------------------------------------------------------
+
+def _is_market_hours(now: datetime) -> bool:
+    """True Mon–Fri 7–18 ET."""
+    return now.weekday() < 5 and 7 <= now.hour < 19
+
+
+def _is_thursday(now: datetime) -> bool:
+    return now.weekday() == 3
+
+
+def _is_friday(now: datetime) -> bool:
+    return now.weekday() == 4
+
+
+def _build_checks() -> list[dict]:
+    """Freshness check definitions for every collector source.
+
+    max_age_h: trigger a catch-up run if last_success is older than this.
+    when:      optional callable(datetime) -> bool; check skipped if False.
+               Use for sources that only publish on specific days/hours.
+    """
+    return [
+        {"source": "price",              "fn": PriceCollector().run,            "max_age_h": 2.0,   "when": _is_market_hours},
+        {"source": "nws_weather",        "fn": WeatherCollector().run,          "max_age_h": 7.0,   "when": None},
+        {"source": "cpc_outlook",        "fn": CPCOutlookCollector().run,       "max_age_h": 26.0,  "when": None},
+        {"source": "eia_930_power_burn", "fn": PowerBurnCollector().run,        "max_age_h": 2.0,   "when": None},
+        {"source": "iso_lmp",            "fn": ISOLMPCollector().run,           "max_age_h": 2.0,   "when": None},
+        {"source": "news_wire",          "fn": NewsWireCollector().run,         "max_age_h": 1.0,   "when": None},
+        {"source": "eia_supply",         "fn": EIASupplyCollector().run,        "max_age_h": 26.0,  "when": None},
+        {"source": "catalyst_calendar",  "fn": CatalystCalendarCollector().run, "max_age_h": 26.0,  "when": None},
+        # Weekly sources: only trigger on release days to avoid fetching stale data
+        {"source": "eia_storage",        "fn": EIAStorageCollector().run,       "max_age_h": 192.0, "when": _is_thursday},
+        {"source": "eia_storage_stats",  "fn": EIAStorageStatsCollector().run,  "max_age_h": 192.0, "when": _is_thursday},
+        {"source": "cftc_cot",           "fn": CFTCCollector().run,             "max_age_h": 192.0, "when": _is_friday},
+        {"source": "rig_count",          "fn": RigCountCollector().run,         "max_age_h": 192.0, "when": _is_friday},
+    ]
+
+
+# Prevent duplicate concurrent catch-up runs for the same source.
+_CATCHUP_ACTIVE: set[str] = set()
+_CATCHUP_LOCK   = threading.Lock()
+
+
+def _stale_sources(checks: list[dict], logger: logging.Logger) -> list[dict]:
+    """Query collector_health; return checks whose source is stale or never collected."""
+    now = datetime.now(ET)
+    try:
+        conn = connect_db()
+        rows = conn.execute(
+            "SELECT source_name, last_success FROM collector_health"
+        ).fetchall()
+        conn.close()
+    except Exception as e:
+        logger.warning("[watchdog] DB read failed: %s", e)
+        return []
+
+    last_success: dict[str, datetime | None] = {r[0]: r[1] for r in rows}
+    stale: list[dict] = []
+
+    for check in checks:
+        source  = check["source"]
+        when_fn = check.get("when")
+
+        if when_fn is not None and not when_fn(now):
+            continue  # outside active window for this source
+
+        last = last_success.get(source)
+        if last is None:
+            age_h = float("inf")  # never collected
+        else:
+            if isinstance(last, str):
+                last = datetime.fromisoformat(last.replace("Z", "+00:00"))
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            age_h = (
+                now.astimezone(timezone.utc) - last.astimezone(timezone.utc)
+            ).total_seconds() / 3600
+
+        if age_h > check["max_age_h"]:
+            label = "never collected" if age_h == float("inf") else f"{age_h:.1f}h old"
+            logger.info(
+                "[watchdog] %s stale (%s, threshold %.1fh) — queuing catch-up",
+                source, label, check["max_age_h"],
+            )
+            stale.append(check)
+
+    return stale
+
+
+def _run_catchup(source: str, fn, logger: logging.Logger) -> None:
+    """Run a single collector catch-up, guarded against duplicate concurrent runs."""
+    with _CATCHUP_LOCK:
+        if source in _CATCHUP_ACTIVE:
+            logger.debug("[watchdog] %s catch-up already running — skipping", source)
+            return
+        _CATCHUP_ACTIVE.add(source)
+    try:
+        fn()
+    except Exception as e:
+        logger.warning("[watchdog] catch-up for %s raised: %s", source, e)
+    finally:
+        with _CATCHUP_LOCK:
+            _CATCHUP_ACTIVE.discard(source)
+
+
+def _startup_gap_check(checks: list[dict], logger: logging.Logger) -> None:
+    """Run once at process start — catch up stale sources in parallel, then wait."""
+    logger.info("[watchdog] startup gap check starting")
+    stale = _stale_sources(checks, logger)
+    if not stale:
+        logger.info("[watchdog] all sources fresh — no catch-up needed")
+        return
+
+    threads = [
+        threading.Thread(
+            target=_run_catchup,
+            args=(c["source"], c["fn"], logger),
+            daemon=True,
+            name=f"startup-{c['source']}",
+        )
+        for c in stale
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=120)  # wait at most 2 min per collector
+    logger.info("[watchdog] startup gap check complete")
+
+
+def _watchdog_job(checks: list[dict], logger: logging.Logger) -> None:
+    """Periodic check — fires stale collectors in background threads."""
+    stale = _stale_sources(checks, logger)
+    for check in stale:
+        threading.Thread(
+            target=_run_catchup,
+            args=(check["source"], check["fn"], logger),
+            daemon=True,
+            name=f"watchdog-{check['source']}",
+        ).start()
+
+
 _LOGGING_CONFIG = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -94,8 +240,9 @@ _LOGGING_CONFIG = {
 }
 
 
-def _build_scheduler() -> BlockingScheduler:
+def _build_scheduler() -> tuple[BlockingScheduler, list[dict]]:
     scheduler = BlockingScheduler(timezone=ET)
+    checks = _build_checks()
 
     # Front month + forward curve: every 30 minutes during extended market hours Mon-Fri
     # Starts at 7 AM to capture pre-market moves; NYMEX NG trades from Sun 6 PM ET.
@@ -306,18 +453,32 @@ def _build_scheduler() -> BlockingScheduler:
         name="Market Brief (Gemini multi-signal synthesis)",
     )
 
-    return scheduler
+    # Watchdog: every 15 minutes, check collector_health for stale sources
+    # and trigger catch-up runs in background threads.
+    wdog_logger = logging.getLogger("scheduler")
+    scheduler.add_job(
+        lambda: _watchdog_job(checks, wdog_logger),
+        CronTrigger(minute="7,22,37,52"),
+        id="watchdog",
+        name="Data freshness watchdog",
+        misfire_grace_time=300,
+    )
+
+    return scheduler, checks
 
 
 def main() -> None:
     logging.config.dictConfig(_LOGGING_CONFIG)
     logger = logging.getLogger("scheduler")
 
-    scheduler = _build_scheduler()
+    scheduler, checks = _build_scheduler()
 
     logger.info("Scheduler starting — %d jobs registered", len(scheduler.get_jobs()))
     for job in scheduler.get_jobs():
         logger.info("  job: %s | next: %s", job.name, getattr(job, "next_run_time", "pending"))
+
+    # Catch up any data gaps from downtime before the regular schedule begins.
+    _startup_gap_check(checks, logger)
 
     try:
         scheduler.start()
