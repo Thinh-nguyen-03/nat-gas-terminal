@@ -97,12 +97,11 @@ _LOGGING_CONFIG = {
 def _build_scheduler() -> BlockingScheduler:
     scheduler = BlockingScheduler(timezone=ET)
 
-    # --- Data collectors ---
-
-    # Front month + forward curve: every 30 minutes during market hours Mon-Fri
+    # Front month + forward curve: every 30 minutes during extended market hours Mon-Fri
+    # Starts at 7 AM to capture pre-market moves; NYMEX NG trades from Sun 6 PM ET.
     scheduler.add_job(
         PriceCollector().run,
-        CronTrigger(day_of_week="mon-fri", hour="9-17", minute="0,30", timezone=ET),
+        CronTrigger(day_of_week="mon-fri", hour="7-18", minute="0,30", timezone=ET),
         id="price",
         name="Price + forward curve (yfinance + FRED)",
         misfire_grace_time=300,
@@ -137,11 +136,19 @@ def _build_scheduler() -> BlockingScheduler:
     )
 
     # EIA storage: Thursday 10:45 AM ET (release is 10:30, 15-minute buffer)
+    # Retry at 11:15 AM in case EIA is delayed (happens ~10% of the time).
     scheduler.add_job(
         EIAStorageCollector().run,
         CronTrigger(day_of_week="thu", hour=10, minute=45, timezone=ET),
         id="eia_storage",
         name="EIA weekly storage report",
+        misfire_grace_time=900,
+    )
+    scheduler.add_job(
+        EIAStorageCollector().run,
+        CronTrigger(day_of_week="thu", hour=11, minute=15, timezone=ET),
+        id="eia_storage_retry",
+        name="EIA weekly storage report (retry)",
         misfire_grace_time=900,
     )
 
@@ -199,10 +206,10 @@ def _build_scheduler() -> BlockingScheduler:
         misfire_grace_time=300,
     )
 
-    # News Wire: every 15 minutes (EIA, FERC RSS feeds — free public)
+    # News Wire: every 30 minutes — reduced from 15 min to ease GNews rate-limit pressure
     scheduler.add_job(
         NewsWireCollector().run,
-        CronTrigger(minute="2,17,32,47"),
+        CronTrigger(minute="2,32"),
         id="news_wire",
         name="News Wire (EIA / FERC RSS feeds)",
         misfire_grace_time=300,
@@ -211,35 +218,39 @@ def _build_scheduler() -> BlockingScheduler:
     # AIS LNG vessel tracking is handled by the Go cmd/ais binary (persistent
     # WebSocket connection). No Python job needed here.
 
-    # --- Feature recomputation (staggered across the hour to avoid DB contention) ---
-
     scheduler.add_job(
         _notify_after(compute_price_features, "feat_price"),
         CronTrigger(minute=10),
         id="feat_price",
         name="Price + curve features",
     )
+    # Storage features: daily at 11:30 AM ET — data is weekly, hourly was wasteful.
+    # Thursday timing: 30 min after EIA Storage Stats (11:00 AM), so new data is ingested.
     scheduler.add_job(
         _notify_after(compute_storage_features, "feat_storage"),
-        CronTrigger(minute=15),
+        CronTrigger(hour=11, minute=30, timezone=ET),
         id="feat_storage",
         name="Storage features (deficit, EOS projection)",
     )
+    # Weather features: every 6 hours at :20 — matches NWS update cadence (0,6,12,18 ET)
     scheduler.add_job(
         _notify_after(compute_weather_features, "feat_weather"),
-        CronTrigger(minute=20),
+        CronTrigger(hour="0,6,12,18", minute=20, timezone=ET),
         id="feat_weather",
         name="Weather features (HDD, revision delta)",
     )
+    # CPC features: daily at 7:30 AM ET — 30 min after CPC collection at 7:00 AM
     scheduler.add_job(
         _notify_after(compute_cpc_features, "feat_cpc"),
-        CronTrigger(minute=22),
+        CronTrigger(hour=7, minute=30, timezone=ET),
         id="feat_cpc",
         name="CPC outlook features (6-10 / 8-14 day weighted prob below)",
     )
+    # COT features: daily at 6:00 AM ET — data is weekly, hourly was wasteful.
+    # Friday 4 PM CFTC release will be reflected by Saturday 6 AM recompute.
     scheduler.add_job(
         _notify_after(compute_cot_features, "feat_cot"),
-        CronTrigger(minute=25),
+        CronTrigger(hour=6, minute=0, timezone=ET),
         id="feat_cot",
         name="COT positioning features",
     )
@@ -252,10 +263,11 @@ def _build_scheduler() -> BlockingScheduler:
         name="ISO LMP stress z-scores + composite demand index",
     )
 
-    # LNG export features: every 10 minutes (Go cmd/ais writes vessel data every 5 min)
+    # LNG export features: every 30 minutes — reduced from 10 min to cut DB lock contention
+    # with the Go AIS binary's 5-min write windows. EIA supply data is daily anyway.
     scheduler.add_job(
         _notify_after(compute_lng_features, "feat_lng"),
-        CronTrigger(minute="5,15,25,35,45,55"),
+        CronTrigger(minute="5,35"),
         id="feat_lng",
         name="LNG implied export rate + terminal utilization",
     )
@@ -284,11 +296,12 @@ def _build_scheduler() -> BlockingScheduler:
         name="Fair value price model (lookup table / OLS)",
     )
 
-    # Market Brief: Gemini synthesis of all signals — runs after fairvalue at :45
+    # Market Brief: Gemini synthesis of all signals — Mon-Fri 7 AM–6 PM ET only.
+    # Restricting to trading hours avoids unnecessary API calls overnight/weekends.
     # No-op when GEMINI_API_KEY is not set.
     scheduler.add_job(
         _notify_after(compute_market_brief, "market_brief"),
-        CronTrigger(minute=45),
+        CronTrigger(day_of_week="mon-fri", hour="7-18", minute=45, timezone=ET),
         id="market_brief",
         name="Market Brief (Gemini multi-signal synthesis)",
     )
