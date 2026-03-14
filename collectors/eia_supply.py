@@ -17,7 +17,7 @@ EIA_SUPPLY_SERIES: dict[str, tuple[str, str, str]] = {
     #  Series ID             : (series_name,                      unit,    frequency)
     # All series are monthly — EIA does not publish weekly supply fundamentals via v2 seriesid.
     # Verify IDs at https://www.eia.gov/opendata/browser/natural-gas if a series returns 404.
-    "NG.N9050US2.M": ("dry_gas_production_mmcf",      "MMcf", "monthly"),
+    "NG.N9070US2.M": ("dry_gas_production_mmcf",      "MMcf", "monthly"),
     "NG.N9133US2.M": ("lng_exports_mmcf",              "MMcf", "monthly"),
     "NG.N3045US2.M": ("power_sector_burn_mmcf",        "MMcf", "monthly"),
     "NG.N9132MX2.M": ("mexico_pipeline_exp_mmcf",      "MMcf", "monthly"),

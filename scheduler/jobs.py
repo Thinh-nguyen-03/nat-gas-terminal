@@ -39,6 +39,7 @@ from transforms.features_storage import compute_storage_features
 from transforms.features_summary import save_summary
 from transforms.market_brief     import compute_market_brief
 from transforms.features_weather import compute_weather_features
+from transforms.features_supply  import compute_supply_features
 from config.settings import LOG_PATH, NOTIFY_API_URL, INTERNAL_API_KEY, connect_db
 
 ET = pytz.timezone("US/Eastern")
@@ -315,6 +316,15 @@ def _build_scheduler() -> tuple[BlockingScheduler, list[dict]]:
         id="eia_supply",
         name="EIA supply fundamentals (production, LNG, pipeline)",
         misfire_grace_time=900,
+    )
+
+    # Supply features: every hour at :15 (after power_burn at :05) and at 8:15 AM ET
+    # (after eia_supply at 8:00 AM). Converts monthly EIA + EIA-930 → daily Bcf/d.
+    scheduler.add_job(
+        _notify_after(compute_supply_features, "feat_supply"),
+        CronTrigger(minute=15),
+        id="feat_supply",
+        name="Supply/demand balance features (production, imports, power burn)",
     )
 
     # CFTC COT: Friday 4:00 PM ET (published ~3:30 PM ET)
