@@ -42,7 +42,7 @@ func (h *Handler) News(w http.ResponseWriter, r *http.Request) {
 		SELECT id, source, title, url, published_at::VARCHAR, score, sentiment, tags, implication
 		FROM news_items
 		WHERE fetched_at >= NOW()::TIMESTAMP - INTERVAL '7 days'
-		ORDER BY score DESC, published_at DESC NULLS LAST
+		ORDER BY published_at DESC NULLS LAST
 		LIMIT 30
 	`)
 	if err != nil {

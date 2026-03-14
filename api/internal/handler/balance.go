@@ -147,7 +147,8 @@ func (h *Handler) queryBalanceDemand(r *http.Request, db *sql.DB) ([]BalanceComp
 		    WHERE feature_name IN (
 		            'power_burn_bcfd',
 		            'weather_implied_resi_comm_bcfd',
-		            'lng_implied_exports_bcfd'
+		            'lng_implied_exports_bcfd',
+		            'mexico_pipeline_exports_bcfd'
 		          )
 		      AND region = 'US'
 		) ranked
@@ -162,11 +163,13 @@ func (h *Handler) queryBalanceDemand(r *http.Request, db *sql.DB) ([]BalanceComp
 		"power_burn_bcfd":               "Power burn",
 		"weather_implied_resi_comm_bcfd": "Residential/commercial (HDD model)",
 		"lng_implied_exports_bcfd":       "LNG exports (AIS estimate)",
+		"mexico_pipeline_exports_bcfd":   "Mexico pipeline exports",
 	}
 	sourceMap := map[string]string{
 		"power_burn_bcfd":               "eia_930",
 		"weather_implied_resi_comm_bcfd": "hdd_model",
 		"lng_implied_exports_bcfd":       "ais",
+		"mexico_pipeline_exports_bcfd":   "eia_supply",
 	}
 
 	var out []BalanceComponent

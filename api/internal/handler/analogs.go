@@ -41,10 +41,30 @@ type AnalogsResponse struct {
 	Analogs    []Analog `json:"analogs"`
 }
 
+// analogRawContent mirrors the JSON written by transforms/features_analog.py.
+type analogRawContent struct {
+	ComputedAt    string             `json:"computed_at"`
+	ReferenceDate string             `json:"reference_date"`
+	FeatureVector map[string]float64 `json:"feature_vector"`
+	Analogs       []analogRawEntry   `json:"analogs"`
+}
+
+type analogRawPriceOutcome struct {
+	Return4w  *float64 `json:"return_4w_pct"`
+	Return8w  *float64 `json:"return_8w_pct"`
+	Return12w *float64 `json:"return_12w_pct"`
+}
+
+type analogRawEntry struct {
+	Date         string                 `json:"date"`
+	Similarity   float64                `json:"similarity"`
+	Features     map[string]float64     `json:"features"`
+	PriceOutcome analogRawPriceOutcome  `json:"price_outcome"`
+}
+
 // Analogs handles GET /api/analogs.
 // Returns the top historical analog periods from summary_outputs
-// (written by transforms/features_analog.py, not yet implemented).
-// Returns an empty list until the analog transform is running.
+// written by transforms/features_analog.py.
 func (h *Handler) Analogs(w http.ResponseWriter, r *http.Request) {
 	db, err := h.openDB()
 	if err != nil {
@@ -65,10 +85,7 @@ func (h *Handler) Analogs(w http.ResponseWriter, r *http.Request) {
 	var contentJSON, generatedAt string
 	err = row.Scan(&contentJSON, &generatedAt)
 	if err == sql.ErrNoRows {
-		// Transform not running yet — return empty response, not an error.
-		writeJSON(w, http.StatusOK, AnalogsResponse{
-			Analogs: []Analog{},
-		})
+		writeJSON(w, http.StatusOK, AnalogsResponse{Analogs: []Analog{}})
 		return
 	}
 	if err != nil {
@@ -77,19 +94,44 @@ func (h *Handler) Analogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var analogs []Analog
-	if err := json.Unmarshal([]byte(contentJSON), &analogs); err != nil {
+	var raw analogRawContent
+	if err := json.Unmarshal([]byte(contentJSON), &raw); err != nil {
 		slog.Error("analogs unmarshal failed", "err", err)
 		writeError(w, http.StatusInternalServerError, "malformed analog data")
 		return
 	}
 
-	if analogs == nil {
-		analogs = []Analog{}
+	analogs := make([]Analog, 0, len(raw.Analogs))
+	for i, entry := range raw.Analogs {
+		a := Analog{
+			Rank:            i + 1,
+			PeriodDate:      entry.Date,
+			SimilarityScore: entry.Similarity,
+			PriceOutcome: AnalogPriceOutcome{
+				Return4w:  entry.PriceOutcome.Return4w,
+				Return8w:  entry.PriceOutcome.Return8w,
+				Return12w: entry.PriceOutcome.Return12w,
+			},
+		}
+		for feat, histVal := range entry.Features {
+			hv := histVal
+			fc := AnalogFeatureCompare{
+				Feature:     feat,
+				AnalogValue: &hv,
+				Matched:     true,
+			}
+			if cv, ok := raw.FeatureVector[feat]; ok {
+				cv := cv
+				fc.CurrentValue = &cv
+			}
+			a.Features = append(a.Features, fc)
+		}
+		analogs = append(analogs, a)
 	}
 
+	computedAt := raw.ComputedAt
 	writeJSON(w, http.StatusOK, AnalogsResponse{
-		ComputedAt: &generatedAt,
+		ComputedAt: &computedAt,
 		Analogs:    analogs,
 	})
 }

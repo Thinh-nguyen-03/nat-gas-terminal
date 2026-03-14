@@ -217,8 +217,8 @@ func (h *Handler) queryLatestStorageWeek(r *http.Request, db *sql.DB) *string {
 	return &week
 }
 
-// queryStorageHistory returns up to 52 weeks of total US storage inventory
-// joined with the EIA 5-year band (avg/max/min) for each matching week.
+// queryStorageHistory returns up to 156 weeks (3 years) of total US storage
+// inventory joined with the EIA 5-year band (avg/max/min) for each week.
 func (h *Handler) queryStorageHistory(r *http.Request, db *sql.DB) ([]StorageHistoryPoint, error) {
 	rows, err := db.QueryContext(r.Context(), `
 		SELECT
@@ -236,7 +236,7 @@ func (h *Handler) queryStorageHistory(r *http.Request, db *sql.DB) ([]StorageHis
 		  AND s.series_name = 'storage_total'
 		GROUP BY s.observation_time, s.value
 		ORDER BY s.observation_time DESC
-		LIMIT 52
+		LIMIT 156
 	`)
 	if err != nil {
 		return nil, err
