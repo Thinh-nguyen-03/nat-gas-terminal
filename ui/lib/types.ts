@@ -4,6 +4,23 @@ export interface ScoreHistoryPoint {
   score: number
   label: string
 }
+export interface FairValuePoint {
+  date: string
+  mid: number | null
+  low: number | null
+  high: number | null
+  gap: number | null
+  price: number | null
+}
+export interface FairValueData {
+  mid: number | null
+  low: number | null
+  high: number | null
+  gap: number | null
+  interpretation: string | null
+  confidence: string | null
+  history: FairValuePoint[]
+}
 export interface ScoreResponse {
   summary_date: string
   score: number
@@ -12,6 +29,7 @@ export interface ScoreResponse {
   what_changed: Record<string, unknown>[]
   generated_at: string
   history: ScoreHistoryPoint[]
+  fair_value: FairValueData | null
 }
 
 // /api/storage

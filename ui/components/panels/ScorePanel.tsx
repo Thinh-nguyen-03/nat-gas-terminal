@@ -2,8 +2,9 @@
 
 import { useMemo } from 'react'
 import {
-  AreaChart,
+  ComposedChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -13,7 +14,7 @@ import {
 import { usePanel } from '@/lib/hooks/usePanel'
 import { PanelShell } from '@/components/ui/PanelShell'
 import { SignalBadge } from '@/components/ui/SignalBadge'
-import { scoreColor } from '@/lib/signals'
+import { scoreColor, signalColor } from '@/lib/signals'
 import { fmt, fmtDate } from '@/lib/fmt'
 import type { ScoreResponse } from '@/lib/types'
 
@@ -61,7 +62,6 @@ const FEATURE_LABELS: Record<string, string> = {
 
 function humanize(key: string): string {
   if (FEATURE_LABELS[key]) return FEATURE_LABELS[key]
-  // Fallback: strip underscores, title-case
   return key
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase())
@@ -75,7 +75,23 @@ function humanize(key: string): string {
 export function ScorePanel() {
   const { data, loading, error, updatedAt, flash } = usePanel<ScoreResponse>('/api/score', SSE_SOURCES)
 
-  const chartData = useMemo(() => {
+  const fv = data?.fair_value ?? null
+
+  // Build fair value band chart data (oldest → newest for recharts)
+  const fvChartData = useMemo(() => {
+    if (!fv?.history?.length) return []
+    return [...fv.history].reverse().map((p) => ({
+      date: p.date.slice(5, 10),
+      low: p.low ?? null,
+      // stacked on top of low to form the band
+      bandSize: p.high != null && p.low != null ? p.high - p.low : null,
+      mid: p.mid ?? null,
+      price: p.price ?? null,
+    }))
+  }, [fv])
+
+  // Fallback: score history chart when no fair value data yet
+  const scoreChartData = useMemo(() => {
     if (!data?.history) return []
     return [...data.history].reverse().map((p) => ({
       date: p.date.slice(5, 10),
@@ -86,8 +102,12 @@ export function ScorePanel() {
   const score = data?.score ?? null
   const color = score !== null ? scoreColor(score) : '#94a3b8'
   const label = data?.label ?? 'neutral'
-
   const whatChanged = data?.what_changed ?? []
+
+  const hasFairValue = fv != null && fv.mid != null
+  const fvGap = fv?.gap ?? null
+  const fvInterp = fv?.interpretation ?? null
+  const gapColor = fvInterp ? signalColor(fvInterp) : '#94a3b8'
 
   return (
     <PanelShell
@@ -99,6 +119,7 @@ export function ScorePanel() {
       error={error}
     >
       <div className="flex flex-col h-full p-3 gap-2">
+        {/* Score headline */}
         <div className="flex items-baseline justify-between gap-3">
           <div className="flex items-baseline gap-3">
             <span
@@ -117,6 +138,7 @@ export function ScorePanel() {
           </span>
         </div>
 
+        {/* What Changed */}
         {whatChanged.length > 0 && (
           <div
             className="text-xs shrink-0"
@@ -158,76 +180,211 @@ export function ScorePanel() {
           </div>
         )}
 
+        {/* Key Drivers */}
         {data?.drivers && data.drivers.length > 0 && (
           <div
-            className="text-xs shrink-0"
+            className="shrink-0"
             style={{ borderTop: '1px solid #1e2433', paddingTop: '6px' }}
           >
-            <div
-              className="uppercase tracking-wider mb-1"
-              style={{ color: '#94a3b8', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}
-            >
+            <div style={{ color: '#fbbf24', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'JetBrains Mono, monospace', marginBottom: 5 }}>
               Key Drivers
             </div>
-            <ul className="flex flex-col gap-0.5">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               {data.drivers.slice(0, 4).map((d, i) => (
-                <li key={i} className="flex gap-1.5 items-start" style={{ color: '#94a3b8' }}>
-                  <span style={{ color: '#34d399', flexShrink: 0 }}>›</span>
-                  <span className="mono">{d}</span>
-                </li>
+                <div key={i} style={{ display: 'flex', gap: 7, alignItems: 'baseline' }}>
+                  <span style={{ color: '#22d3ee', flexShrink: 0, fontSize: 11 }}>›</span>
+                  <span style={{ color: '#b8c4d0', fontSize: 11, lineHeight: 1.45, fontFamily: 'JetBrains Mono, monospace' }}>{d}</span>
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         )}
 
-        <div className="flex-1 min-h-0" style={{ minHeight: 80, maxHeight: 140 }}>
+        {/* Fair Value Summary */}
+        {hasFairValue && (
+          <div
+            className="shrink-0"
+            style={{ borderTop: '1px solid #1e2433', paddingTop: '6px' }}
+          >
+            <div style={{ color: '#94a3b8', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'JetBrains Mono, monospace', marginBottom: 5 }}>
+              Fair Value Model
+            </div>
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between items-baseline">
+                <span style={{ color: '#94a3b8', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}>
+                  MODEL RANGE
+                </span>
+                <span className="num" style={{ color: '#22d3ee', fontSize: 11 }}>
+                  ${fmt(fv.low, 2)} — ${fmt(fv.high, 2)}
+                </span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span style={{ color: '#94a3b8', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}>
+                  MID ESTIMATE
+                </span>
+                <span className="num" style={{ color: '#e2e8f0', fontSize: 11 }}>
+                  ${fmt(fv.mid, 2)}/MMBtu
+                </span>
+              </div>
+              {fvGap != null && (
+                <div className="flex justify-between items-baseline">
+                  <span style={{ color: '#94a3b8', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}>
+                    GAP
+                  </span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="num" style={{ color: gapColor, fontSize: 11 }}>
+                      {fvGap > 0 ? '+' : ''}{fmt(fvGap, 2)}
+                    </span>
+                    {fvInterp && <SignalBadge interpretation={fvInterp} size="sm" />}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Chart — fair value band + price if available, else score history */}
+        <div style={{ flex: 1, minHeight: 200, marginTop: 'auto' }}>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 4, right: 0, left: 4, bottom: 0 }}>
-              <defs>
-                <linearGradient id="scoreGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#34d399" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#34d399" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <XAxis
-                dataKey="date"
-                tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
-                axisLine={{ stroke: '#1e2433' }}
-                tickLine={false}
-                interval="preserveStartEnd"
-              />
-              <YAxis
-                tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
-                axisLine={false}
-                tickLine={false}
-                width={28}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#141720',
-                  border: '1px solid #1e2433',
-                  borderRadius: 0,
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: 11,
-                  color: '#e2e8f0',
-                }}
-                labelStyle={{ color: '#e2e8f0' }}
-                itemStyle={{ color: '#e2e8f0' }}
-                formatter={(value: number) => [fmt(value, 1), 'Score']}
-              />
-              <ReferenceLine y={0} stroke="#1e2433" strokeDasharray="3 3" />
-              <Area
-                type="monotone"
-                dataKey="score"
-                stroke="#34d399"
-                strokeWidth={1.5}
-                fill="url(#scoreGrad)"
-                dot={false}
-                activeDot={{ r: 3, fill: '#34d399' }}
-              />
-            </AreaChart>
+            {hasFairValue && fvChartData.length > 0 ? (
+              <ComposedChart data={fvChartData} margin={{ top: 4, right: 0, left: 4, bottom: 0 }}>
+                <XAxis
+                  dataKey="date"
+                  tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
+                  axisLine={{ stroke: '#1e2433' }}
+                  tickLine={false}
+                  interval="preserveStartEnd"
+                  padding={{ left: 10, right: 4 }}
+                />
+                <YAxis
+                  tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={32}
+                  tickFormatter={(v) => `$${v.toFixed(1)}`}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#141720',
+                    border: '1px solid #1e2433',
+                    borderRadius: 0,
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 11,
+                    color: '#e2e8f0',
+                  }}
+                  labelStyle={{ color: '#e2e8f0' }}
+                  formatter={(value: number, name: string) => {
+                    if (name === 'bandSize') return [`$${value.toFixed(2)}`, 'Band Width']
+                    if (name === 'low') return [`$${value.toFixed(2)}`, 'FV Low']
+                    if (name === 'mid') return [`$${value.toFixed(2)}`, 'FV Mid']
+                    if (name === 'price') return [`$${value.toFixed(2)}`, 'Price']
+                    return [value, name]
+                  }}
+                />
+                {/* Transparent base — fills from 0 to low, creating the floor of the band */}
+                <Area
+                  dataKey="low"
+                  stackId="fv"
+                  stroke="none"
+                  fill="transparent"
+                  legendType="none"
+                  isAnimationActive={false}
+                />
+                {/* Cyan band from low → high */}
+                <Area
+                  dataKey="bandSize"
+                  stackId="fv"
+                  stroke="#22d3ee"
+                  strokeWidth={0.5}
+                  strokeOpacity={0.4}
+                  fill="#22d3ee"
+                  fillOpacity={0.12}
+                  legendType="none"
+                  isAnimationActive={false}
+                />
+                {/* Fair value mid — dashed cyan */}
+                <Line
+                  dataKey="mid"
+                  stroke="#22d3ee"
+                  strokeWidth={1}
+                  strokeDasharray="4 3"
+                  dot={false}
+                  isAnimationActive={false}
+                />
+                {/* Actual price — amber */}
+                <Line
+                  dataKey="price"
+                  stroke="#f59e0b"
+                  strokeWidth={1.5}
+                  dot={false}
+                  isAnimationActive={false}
+                  activeDot={{ r: 3, fill: '#f59e0b' }}
+                />
+              </ComposedChart>
+            ) : (
+              // Fallback: score history area chart
+              <ComposedChart data={scoreChartData} margin={{ top: 4, right: 0, left: 4, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="scoreGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#34d399" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#34d399" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <XAxis
+                  dataKey="date"
+                  tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
+                  axisLine={{ stroke: '#1e2433' }}
+                  tickLine={false}
+                  interval="preserveStartEnd"
+                  padding={{ left: 10, right: 4 }}
+                />
+                <YAxis
+                  tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={28}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#141720',
+                    border: '1px solid #1e2433',
+                    borderRadius: 0,
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 11,
+                    color: '#e2e8f0',
+                  }}
+                  labelStyle={{ color: '#e2e8f0' }}
+                  itemStyle={{ color: '#e2e8f0' }}
+                  formatter={(value: number) => [fmt(value, 1), 'Score']}
+                />
+                <ReferenceLine y={0} stroke="#1e2433" strokeDasharray="3 3" />
+                <Area
+                  type="monotone"
+                  dataKey="score"
+                  stroke="#34d399"
+                  strokeWidth={1.5}
+                  fill="url(#scoreGrad)"
+                  dot={false}
+                  activeDot={{ r: 3, fill: '#34d399' }}
+                />
+              </ComposedChart>
+            )}
           </ResponsiveContainer>
         </div>
+
+        {/* Chart legend */}
+        {hasFairValue && fvChartData.length > 0 && (
+          <div className="flex gap-4 justify-center shrink-0" style={{ marginTop: -4 }}>
+            <div className="flex items-center gap-1">
+              <div style={{ width: 16, height: 2, background: '#f59e0b' }} />
+              <span style={{ color: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}>PRICE</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div style={{ width: 16, height: 2, background: '#22d3ee', opacity: 0.6, borderTop: '1px dashed #22d3ee' }} />
+              <span style={{ color: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}>FAIR VALUE</span>
+            </div>
+          </div>
+        )}
       </div>
     </PanelShell>
   )
