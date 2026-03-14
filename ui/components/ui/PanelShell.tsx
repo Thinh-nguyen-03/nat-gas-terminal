@@ -5,6 +5,7 @@ import { fmtTime } from '@/lib/fmt'
 
 interface PanelShellProps {
   title: string
+  titleExtra?: React.ReactNode
   source: string
   updatedAt: Date | null
   confidence?: string
@@ -17,6 +18,7 @@ interface PanelShellProps {
 
 export function PanelShell({
   title,
+  titleExtra,
   source,
   updatedAt,
   confidence,
@@ -54,12 +56,15 @@ export function PanelShell({
         className="flex items-center justify-between px-3 py-1.5 shrink-0"
         style={{ borderBottom: '1px solid #1e2433', backgroundColor: '#0c0e11' }}
       >
-        <span
-          className="text-xs font-semibold tracking-widest"
-          style={{ fontFamily: 'JetBrains Mono, monospace', color: '#22d3ee' }}
-        >
-          {title}
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className="text-xs font-semibold tracking-widest"
+            style={{ fontFamily: 'JetBrains Mono, monospace', color: '#22d3ee' }}
+          >
+            {title}
+          </span>
+          {titleExtra}
+        </div>
         <div
           className="flex items-center gap-3 text-xs"
           style={{ fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8' }}

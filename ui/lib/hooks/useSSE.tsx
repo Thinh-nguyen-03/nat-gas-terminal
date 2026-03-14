@@ -36,6 +36,15 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
 
     const es = new EventSource('/api/stream')
     esRef.current = es
+    let isFirstOpen = true
+
+    es.onopen = () => {
+      if (!isFirstOpen) {
+        // Reconnected after a drop — re-fetch all panels to catch missed events
+        listenersRef.current.forEach((set) => set.forEach((cb) => cb()))
+      }
+      isFirstOpen = false
+    }
 
     es.addEventListener('collection_complete', (e: MessageEvent) => {
       const source = e.data?.trim()

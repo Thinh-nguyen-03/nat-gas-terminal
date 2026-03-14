@@ -64,7 +64,7 @@ export function BriefPanel() {
           {content.risk && (
             <div style={{
               flexShrink: 0,
-              width: '30%',
+              width: '42%',
               minWidth: 200,
               borderLeft: '2px solid rgba(248,113,113,0.35)',
               marginRight: 12,
@@ -82,16 +82,16 @@ export function BriefPanel() {
               </div>
               <div style={{ display: 'flex', gap: 7, alignItems: 'center', marginTop: 10 }}>
                 <span style={{
-                  fontSize: 8,
+                  fontSize: 10,
                   color: '#22d3ee',
                   backgroundColor: 'rgba(34,211,238,0.07)',
                   border: '1px solid rgba(34,211,238,0.18)',
-                  padding: '1px 5px',
+                  padding: '2px 6px',
                   whiteSpace: 'nowrap',
                 }}>
                   {content.model}
                 </span>
-                <span style={{ color: '#94a3b8', fontSize: 8 }}>{data?.date}</span>
+                <span style={{ color: '#cbd5e1', fontSize: 10 }}>{data?.date}</span>
               </div>
             </div>
           )}

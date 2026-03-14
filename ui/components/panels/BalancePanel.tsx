@@ -5,14 +5,14 @@ import { PanelShell } from '@/components/ui/PanelShell'
 import { fmt, fmtSign } from '@/lib/fmt'
 import type { BalanceResponse, BalanceComponent } from '@/lib/types'
 
-const SSE_SOURCES = ['eia_supply', 'feat_storage', 'feat_weather', 'feat_lng']
+const SSE_SOURCES = ['feat_supply', 'feat_storage', 'feat_weather', 'feat_lng']
 
 function ComponentRow({ comp }: { comp: BalanceComponent }) {
   return (
     <div className="flex items-center justify-between text-xs gap-1">
       <span
         className="truncate"
-        style={{ color: '#94a3b8', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.03em' }}
+        style={{ color: '#cbd5e1', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', fontSize: 11, letterSpacing: '0.03em' }}
       >
         {comp.name}
       </span>
@@ -92,7 +92,7 @@ export function BalancePanel() {
           <div>
             <div
               className="text-xs uppercase tracking-wider mb-1 flex justify-between"
-              style={{ fontFamily: 'JetBrains Mono, monospace', color: '#4ade80', fontSize: 9 }}
+              style={{ fontFamily: 'JetBrains Mono, monospace', color: '#4ade80', fontSize: 13 }}
             >
               <span>SUPPLY</span>
               <span className="num" style={{ color: '#e2e8f0' }}>
@@ -109,7 +109,7 @@ export function BalancePanel() {
           <div>
             <div
               className="text-xs uppercase tracking-wider mb-1 flex justify-between"
-              style={{ fontFamily: 'JetBrains Mono, monospace', color: '#f87171', fontSize: 9 }}
+              style={{ fontFamily: 'JetBrains Mono, monospace', color: '#f87171', fontSize: 13 }}
             >
               <span>DEMAND</span>
               <span className="num" style={{ color: '#e2e8f0' }}>

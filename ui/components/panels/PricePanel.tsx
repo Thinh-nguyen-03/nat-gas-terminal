@@ -103,12 +103,13 @@ export function PricePanel() {
         {/* LNG Arb */}
         {arb && (
           <div
-            className="text-xs flex gap-4"
+            className="flex gap-4"
             style={{
               borderTop: '1px solid #1e2433',
               paddingTop: 6,
               fontFamily: 'JetBrains Mono, monospace',
               color: '#94a3b8',
+              fontSize: 10,
             }}
           >
             <span>TTF: <span style={{ color: '#e2e8f0' }}>${fmt(arb.ttf_spot_usd_mmbtu, 3)}</span></span>
@@ -123,7 +124,7 @@ export function PricePanel() {
           </div>
         )}
 
-        <div style={{ height: 100 }}>
+        <div className="flex-1 min-h-0" style={{ minHeight: 80 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={priceChartData} margin={{ top: 4, right: 0, left: 4, bottom: 0 }}>
               <XAxis
@@ -132,6 +133,7 @@ export function PricePanel() {
                 axisLine={{ stroke: '#1e2433' }}
                 tickLine={false}
                 interval="preserveStartEnd"
+                padding={{ left: 10, right: 4 }}
               />
               <YAxis
                 tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
@@ -175,7 +177,7 @@ export function PricePanel() {
             >
               Forward Curve
             </div>
-            <div style={{ height: 90 }}>
+            <div style={{ height: 165 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={curveChartData} margin={{ top: 4, right: 0, left: 4, bottom: 0 }}>
                   <XAxis
@@ -183,6 +185,7 @@ export function PricePanel() {
                     tick={{ fill: '#94a3b8', fontSize: 8, fontFamily: 'JetBrains Mono, monospace' }}
                     axisLine={{ stroke: '#1e2433' }}
                     tickLine={false}
+                    padding={{ left: 10, right: 4 }}
                   />
                   <YAxis
                     tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
@@ -193,17 +196,16 @@ export function PricePanel() {
                     tickFormatter={(v: number) => `$${v.toFixed(1)}`}
                   />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#141720',
-                      border: '1px solid #1e2433',
-                      borderRadius: 0,
-                      fontFamily: 'JetBrains Mono, monospace',
-                      fontSize: 11,
-                      color: '#e2e8f0',
+                    cursor={{ fill: '#e2e8f0', fillOpacity: 0.06 }}
+                    content={({ payload }) => {
+                      if (!payload?.length) return null
+                      const p = payload[0] as { payload?: { ticker?: string }; value?: number }
+                      return (
+                        <div style={{ backgroundColor: '#141720', border: '1px solid #1e2433', padding: '4px 8px', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#e2e8f0' }}>
+                          {p.payload?.ticker} : ${fmt(p.value ?? 0, 3)}
+                        </div>
+                      )
                     }}
-                    labelStyle={{ color: '#e2e8f0' }}
-                    itemStyle={{ color: '#e2e8f0' }}
-                    formatter={(value: number, _: string, props: { payload?: { ticker?: string } }) => [`$${fmt(value, 3)}`, props.payload?.ticker ?? 'Price']}
                   />
                   <Bar dataKey="price" fill="#a5b4fc" fillOpacity={0.6} radius={[2, 2, 0, 0]} />
                 </BarChart>

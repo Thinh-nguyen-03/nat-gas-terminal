@@ -113,6 +113,7 @@ export function COTPanel() {
                 axisLine={{ stroke: '#1e2433' }}
                 tickLine={false}
                 interval="preserveStartEnd"
+                padding={{ left: 10, right: 4 }}
               />
               <YAxis
                 tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}

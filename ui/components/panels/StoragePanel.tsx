@@ -27,7 +27,7 @@ export function StoragePanel() {
   const chartData = useMemo(() => {
     if (!data?.history) return []
     return [...data.history].reverse().map((p) => ({
-      date: p.week_ending?.slice(5, 10) ?? '',
+      date: p.week_ending?.slice(0, 10) ?? '',
       total: p.total_bcf,
       avg5yr: p.avg_5yr_bcf ?? null,
       max5yr: p.max_5yr_bcf ?? null,
@@ -125,7 +125,11 @@ export function StoragePanel() {
                 tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
                 axisLine={{ stroke: '#1e2433' }}
                 tickLine={false}
-                interval="preserveStartEnd"
+                interval={12}
+                tickFormatter={(d: string) => {
+                  const dt = new Date(d)
+                  return `${dt.toLocaleString('en-US', { month: 'short' })}'${String(dt.getFullYear()).slice(2)}`
+                }}
               />
               <YAxis
                 tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
@@ -157,7 +161,7 @@ export function StoragePanel() {
                       fontFamily: 'JetBrains Mono, monospace',
                       fontSize: 11,
                     }}>
-                      <div style={{ color: '#e2e8f0', marginBottom: 4 }}>{label}</div>
+                      <div style={{ color: '#e2e8f0', marginBottom: 4 }}>{(label as string)?.slice(0, 10)}</div>
                       {payload.map((p) => p.value != null && (
                         <div key={p.dataKey as string} style={{ color: colors[p.dataKey as string] ?? '#e2e8f0' }}>
                           {names[p.dataKey as string] ?? p.dataKey}: {fmt(p.value as number, 0, ' BCF')}

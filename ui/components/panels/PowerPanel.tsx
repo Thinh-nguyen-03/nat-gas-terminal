@@ -24,7 +24,7 @@ export function PowerPanel() {
   const chartData = useMemo(() => {
     if (!data?.history) return []
     return [...data.history].reverse().map((p) => ({
-      ts: p.ts?.slice(11, 16) ?? '',
+      ts: p.ts ? new Date(p.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '',
       stress: p.stress_index,
     }))
   }, [data])
@@ -103,7 +103,7 @@ export function PowerPanel() {
                             ? '#f87171'
                             : (iso.z_score ?? 0) < -1.5
                             ? '#4ade80'
-                            : '#94a3b8',
+                            : '#cbd5e1',
                         fontSize: 10,
                       }}
                     >
@@ -117,7 +117,7 @@ export function PowerPanel() {
           </div>
         )}
 
-        <div className="flex-1 min-h-0" style={{ minHeight: 70 }}>
+        <div style={{ flex: 1, minHeight: 245, marginTop: 'auto' }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
               <XAxis
@@ -126,13 +126,15 @@ export function PowerPanel() {
                 axisLine={{ stroke: '#1e2433' }}
                 tickLine={false}
                 interval="preserveStartEnd"
+                padding={{ left: 10, right: 4 }}
               />
               <YAxis
                 tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
                 axisLine={false}
                 tickLine={false}
-                width={24}
-                domain={['auto', 'auto']}
+                width={32}
+                domain={[(dataMin: number) => Math.floor(dataMin), (dataMax: number) => Math.ceil(dataMax)]}
+                tickFormatter={(v: number) => String(Math.round(v))}
               />
               <Tooltip
                 contentStyle={{

@@ -71,12 +71,12 @@ function VesselRow({ vessel }: { vessel: AISVessel }) {
 
   const statusColor = vessel.status === 'loading' ? '#4ade80'
     : vessel.status === 'anchored' ? '#fbbf24'
-    : '#64748b'
+    : '#cbd5e1'
   const statusLabel = vessel.status === 'loading' ? 'loading'
     : vessel.status === 'anchored' ? 'anchored'
     : 'unconfirmed'
 
-  const dot = <span style={{ color: '#64748b', padding: '0 2px' }}>·</span>
+  const dot = <span style={{ color: '#94a3b8', padding: '0 2px' }}>·</span>
 
   return (
     <div style={{
@@ -84,16 +84,17 @@ function VesselRow({ vessel }: { vessel: AISVessel }) {
       paddingLeft: 18, paddingTop: 0, paddingBottom: 0,
       fontFamily: 'JetBrains Mono, monospace',
       whiteSpace: 'nowrap', overflow: 'hidden',
+      lineHeight: 1.2,
     }}>
       <span style={{ color: statusColor, fontSize: 10, flexShrink: 0 }}>└</span>
-      <span style={{ color: '#94a3b8', fontSize: 9, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}
+      <span style={{ color: '#e2e8f0', fontSize: 9, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}
         title={vessel.name || `MMSI ${vessel.mmsi}`}>
         {vessel.name || `MMSI:${vessel.mmsi}`}
       </span>
       {dot}
-      <span style={{ color: statusColor, fontSize: 10, flexShrink: 0 }}>{statusLabel}</span>
-      {hours !== null && hours > 0 && <>{dot}<span style={{ color: '#94a3b8', fontSize: 10, flexShrink: 0 }}>{hours}h</span></>}
-      {dest && <>{dot}<span style={{ color: '#94a3b8', fontSize: 10, flexShrink: 0 }} title={rawDest}>→ {dest}</span></>}
+      <span style={{ color: statusColor, fontSize: 9, flexShrink: 0 }}>{statusLabel}</span>
+      {hours !== null && hours > 0 && <>{dot}<span style={{ color: '#cbd5e1', fontSize: 9, flexShrink: 0 }}>{hours}h</span></>}
+      {dest && <>{dot}<span style={{ color: '#38bdf8', fontSize: 9, flexShrink: 0 }} title={rawDest}>→ {dest}</span></>}
     </div>
   )
 }
@@ -158,7 +159,7 @@ export function LNGPanel() {
             {utilPct !== null && (
               <div
                 className="text-sm num"
-                style={{ fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8' }}
+                style={{ fontFamily: 'JetBrains Mono, monospace', color: '#cbd5e1' }}
               >
                 {fmt(utilPct, 1, '% util')} of {fmt(capacity, 1, ' BCF/D cap')}
               </div>
@@ -169,8 +170,8 @@ export function LNGPanel() {
           <div className="flex flex-col items-end gap-0.5 shrink-0">
             {epi !== null && (
               <div
-                className="text-xs num font-semibold"
-                style={{ fontFamily: 'JetBrains Mono, monospace', color: epiColor }}
+                className="num font-semibold"
+                style={{ fontFamily: 'JetBrains Mono, monospace', color: epiColor, fontSize: 12 }}
                 title="Export Pressure Index (0-100): weighted composite of utilization and queue depth"
               >
                 EPI {fmt(epi, 0)}
@@ -178,8 +179,8 @@ export function LNGPanel() {
             )}
             {queue !== null && queue > 0 && (
               <div
-                className="text-xs num"
-                style={{ fontFamily: 'JetBrains Mono, monospace', color: '#fbbf24' }}
+                className="num"
+                style={{ fontFamily: 'JetBrains Mono, monospace', color: '#fbbf24', fontSize: 12 }}
                 title="Ships anchored waiting for a berth — demand exceeds current throughput"
               >
                 {queue} QUEUED
@@ -187,8 +188,8 @@ export function LNGPanel() {
             )}
             {euPct !== null && (
               <div
-                className="text-xs num"
-                style={{ fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8' }}
+                className="num"
+                style={{ fontFamily: 'JetBrains Mono, monospace', color: '#cbd5e1', fontSize: 12 }}
                 title="% of vessels with known destination bound for European ports"
               >
                 EU {fmt(euPct, 0, '%')}
@@ -199,23 +200,23 @@ export function LNGPanel() {
 
         {/* Terminal Table with inline vessel manifest */}
         {data?.terminals && data.terminals.length > 0 && (
-          <div style={{ borderTop: '1px solid #1e2433', paddingTop: 6, overflowY: 'auto', maxHeight: 280 }}>
+          <div style={{ borderTop: '1px solid #1e2433', paddingTop: 6 }}>
             <div
               className="flex items-center justify-between mb-1"
-              style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9 }}
+              style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}
             >
-              <span style={{ color: '#64748b' }}>TERMINALS</span>
+              <span style={{ color: '#94a3b8' }}>TERMINALS</span>
               <div className="flex shrink-0 num" style={{ gap: 0 }}>
-                <span className="w-10 text-right" style={{ color: '#4ade80', opacity: 0.6 }}>LOAD</span>
-                <span className="w-10 text-right" style={{ color: '#fbbf24', opacity: 0.6 }}>ANCH</span>
-                <span className="w-10 text-right" style={{ color: '#64748b' }}>CAP</span>
+                <span className="w-10 text-right" style={{ color: '#4ade80' }}>LOAD</span>
+                <span className="w-10 text-right" style={{ color: '#fbbf24' }}>ANCH</span>
+                <span className="w-10 text-right" style={{ color: '#94a3b8' }}>CAP</span>
               </div>
             </div>
             <div className="flex flex-col gap-0">
               {data.terminals.map((t: LNGTerminal) => {
                 const termVessels = vessels.filter((v: AISVessel) => v.terminal === t.name)
-                const loadColor = (t.ships_loading ?? 0) > 0 ? '#4ade80' : '#64748b'
-                const anchColor = (t.ships_anchored ?? 0) > 0 ? '#fbbf24' : '#64748b'
+                const loadColor = (t.ships_loading ?? 0) > 0 ? '#4ade80' : '#cbd5e1'
+                const anchColor = (t.ships_anchored ?? 0) > 0 ? '#fbbf24' : '#cbd5e1'
                 return (
                   <div key={t.name}>
                     <div className="flex items-center justify-between text-xs gap-1">
@@ -238,7 +239,7 @@ export function LNGPanel() {
                         <span className="w-10 text-right" style={{ color: anchColor }} title="Ships anchored waiting for berth">
                           {t.ships_anchored ?? '—'}
                         </span>
-                        <span className="w-10 text-right" style={{ color: '#64748b' }}>
+                        <span className="w-10 text-right" style={{ color: '#cbd5e1' }}>
                           {fmt(t.capacity_bcfd, 1)}
                         </span>
                       </div>
@@ -254,7 +255,7 @@ export function LNGPanel() {
           </div>
         )}
 
-        <div style={{ height: 250, flexShrink: 0 }}>
+        <div className="flex-1 min-h-0" style={{ minHeight: 80 }}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 4, right: 0, left: 4, bottom: 0 }}>
               <defs>
@@ -269,6 +270,7 @@ export function LNGPanel() {
                 axisLine={{ stroke: '#1e2433' }}
                 tickLine={false}
                 interval="preserveStartEnd"
+                padding={{ left: 10, right: 4 }}
               />
               <YAxis
                 tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}

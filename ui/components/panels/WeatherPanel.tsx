@@ -17,14 +17,41 @@ import type { WeatherResponse, CPCWindow } from '@/lib/types'
 
 const SSE_SOURCES = ['weather', 'feat_weather', 'feat_cpc']
 
+function hddColor(v: number | null): string {
+  if (v === null) return '#e2e8f0'
+  if (v > 80) return '#93c5fd'   // very cold → blue
+  if (v > 30) return '#e2e8f0'   // moderate → white
+  return '#fbbf24'               // warm → amber
+}
+
+function cityHddColor(v: number | null): string {
+  if (v === null) return '#cbd5e1'
+  if (v > 30) return '#93c5fd'
+  if (v > 10) return '#e2e8f0'
+  return '#cbd5e1'
+}
+
+function cityTempColor(v: number | null): string {
+  if (v === null) return '#94a3b8'
+  if (v < 35) return '#93c5fd'   // freezing → blue
+  if (v > 75) return '#fbbf24'   // hot → amber
+  return '#e2e8f0'
+}
+
+function probBelowColor(v: number | null): string {
+  if (v === null) return '#94a3b8'
+  if (v > 55) return '#4ade80'   // high prob cold → bullish green
+  if (v < 40) return '#f87171'   // low prob cold → bearish red
+  return '#94a3b8'
+}
+
 function CPCBadge({ label, window }: { label: string; window: CPCWindow | null | undefined }) {
   if (!window) return null
   const prob = window.weighted_prob_below
   return (
     <div className="flex flex-col gap-0.5">
       <span
-        className="text-xs uppercase tracking-wider"
-        style={{ color: '#94a3b8', fontFamily: 'JetBrains Mono, monospace', fontSize: 9 }}
+        style={{ color: '#94a3b8', fontFamily: 'JetBrains Mono, monospace', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em' }}
       >
         {label}
       </span>
@@ -32,7 +59,7 @@ function CPCBadge({ label, window }: { label: string; window: CPCWindow | null |
       {prob !== null && (
         <span
           className="num"
-          style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'JetBrains Mono, monospace' }}
+          style={{ fontSize: 10, color: probBelowColor(prob), fontFamily: 'JetBrains Mono, monospace' }}
         >
           P(Below): {fmt(prob, 0, '%')}
         </span>
@@ -74,7 +101,7 @@ export function WeatherPanel() {
             <div className="flex items-baseline gap-2">
               <span
                 className="text-3xl font-bold num"
-                style={{ fontFamily: 'JetBrains Mono, monospace', color: '#e2e8f0' }}
+                style={{ fontFamily: 'JetBrains Mono, monospace', color: hddColor(hdd) }}
               >
                 {fmt(hdd, 0)}
               </span>
@@ -86,6 +113,7 @@ export function WeatherPanel() {
                 style={{
                   fontFamily: 'JetBrains Mono, monospace',
                   color: demandVsNormal >= 0 ? '#4ade80' : '#f87171',
+                  fontWeight: 600,
                 }}
               >
                 {fmtSign(demandVsNormal, 1, ' BCF/D vs normal')}
@@ -94,15 +122,16 @@ export function WeatherPanel() {
             {impliedDemand !== null && (
               <div
                 className="text-xs"
-                style={{ fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8' }}
+                style={{ fontFamily: 'JetBrains Mono, monospace', color: '#cbd5e1' }}
               >
-                Implied demand: {fmt(impliedDemand, 1, ' BCF/D')}
+                Implied demand:{' '}
+                <span style={{ color: '#cbd5e1' }}>{fmt(impliedDemand, 1, ' BCF/D')}</span>
               </div>
             )}
           </div>
           {revDelta !== null && (
             <div className="text-xs text-right">
-              <div style={{ color: '#94a3b8', fontFamily: 'JetBrains Mono, monospace', fontSize: 9 }}>
+              <div style={{ color: '#cbd5e1', fontFamily: 'JetBrains Mono, monospace', fontSize: 9 }}>
                 HDD REVISION
               </div>
               <span
@@ -111,6 +140,7 @@ export function WeatherPanel() {
                   fontFamily: 'JetBrains Mono, monospace',
                   color: revDelta > 0 ? '#4ade80' : revDelta < 0 ? '#f87171' : '#94a3b8',
                   fontSize: 13,
+                  fontWeight: 600,
                 }}
               >
                 {fmtSign(revDelta, 1)}
@@ -136,21 +166,20 @@ export function WeatherPanel() {
               style={{
                 gridTemplateColumns: '1fr 40px 50px',
                 fontFamily: 'JetBrains Mono, monospace',
-                color: '#94a3b8',
               }}
             >
-              <span style={{ fontSize: 9 }}>CITY</span>
-              <span className="text-right" style={{ fontSize: 9 }}>HDD</span>
-              <span className="text-right" style={{ fontSize: 9 }}>HIGH °F</span>
+              <span style={{ fontSize: 9, color: '#94a3b8' }}>CITY</span>
+              <span className="text-right" style={{ fontSize: 9, color: '#94a3b8' }}>HDD</span>
+              <span className="text-right" style={{ fontSize: 9, color: '#94a3b8' }}>HIGH °F</span>
               {data.cities.slice(0, 5).map((city) => (
                 <React.Fragment key={city.city}>
                   <span style={{ color: '#cbd5e1', fontFamily: 'JetBrains Mono, monospace' }}>
                     {city.city.replace(/_/g, ' ').toUpperCase()}
                   </span>
-                  <span className="text-right num" style={{ color: '#e2e8f0' }}>
+                  <span className="text-right num" style={{ color: cityHddColor(city.hdd_7d) }}>
                     {fmt(city.hdd_7d, 0)}
                   </span>
-                  <span className="text-right num" style={{ color: '#e2e8f0' }}>
+                  <span className="text-right num" style={{ color: cityTempColor(city.high_temp_f) }}>
                     {fmt(city.high_temp_f, 0)}°
                   </span>
                 </React.Fragment>
@@ -159,21 +188,22 @@ export function WeatherPanel() {
           </div>
         )}
 
-        <div className="flex-1 min-h-0" style={{ minHeight: 70 }}>
+        <div style={{ flex: 1, minHeight: 180, marginTop: 'auto' }}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+            <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <XAxis
                 dataKey="date"
                 tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
                 axisLine={{ stroke: '#1e2433' }}
                 tickLine={false}
                 interval="preserveStartEnd"
+                padding={{ left: 10, right: 4 }}
               />
               <YAxis
                 tick={{ fill: '#94a3b8', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
                 axisLine={false}
                 tickLine={false}
-                width={24}
+                width={30}
               />
               <Tooltip
                 contentStyle={{
