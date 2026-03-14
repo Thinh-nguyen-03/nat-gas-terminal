@@ -11,6 +11,7 @@ import { BalancePanel } from '@/components/panels/BalancePanel'
 import { NewsPanel } from '@/components/panels/NewsPanel'
 import { BriefPanel } from '@/components/panels/BriefPanel'
 import { StatusBar } from '@/components/StatusBar'
+import { HelpButton } from '@/components/ui/HelpButton'
 
 export default function DashboardPage() {
   return (
@@ -33,6 +34,7 @@ export default function DashboardPage() {
           >
             NATURAL GAS FUNDAMENTALS
           </span>
+          <HelpButton />
         </div>
         <span
           className="text-xs"
@@ -52,7 +54,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Row 2: Score (4) + Weather (4) + Power (4) — compact metric panels */}
-        <div className="grid grid-cols-12 gap-3" style={{ minHeight: 240 }}>
+        <div className="grid grid-cols-12 gap-3 overflow-hidden" style={{ height: 620, gridTemplateRows: '620px' }}>
           <div className="col-span-4 h-full">
             <ScorePanel />
           </div>
@@ -64,12 +66,12 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Row 3: Price (6) + Storage (6) — chart panels, half-width each */}
-        <div className="grid grid-cols-12 gap-3" style={{ minHeight: 300 }}>
-          <div className="col-span-6 h-full">
+        {/* Row 3: Price (5) + Storage (7) */}
+        <div className="grid grid-cols-12 gap-3" style={{ minHeight: 450 }}>
+          <div className="col-span-5 h-full">
             <PricePanel />
           </div>
-          <div className="col-span-6 h-full">
+          <div className="col-span-7 h-full">
             <StoragePanel />
           </div>
         </div>
