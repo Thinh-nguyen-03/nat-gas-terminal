@@ -223,10 +223,25 @@ Engineered features computed from `facts_time_series`. One row per `(feature_dat
 | `cot_mm_net_pct_oi` | % of OI | Contrarian: <−20% bullish (crowded short), >+20% bearish (crowded long) | Spec positioning extremes |
 | `cot_mm_net_wow` | contracts | neutral | Weekly change in MM net |
 | `cot_open_interest` | contracts | neutral | Total market open interest |
+| `dry_gas_production_bcfd` | BCF/d | neutral | EIA monthly marketed dry gas production (region=US, ~2-month lag) |
+| `canada_imports_bcfd` | BCF/d | neutral | Total US pipeline imports, ~99% from Canada (EIA monthly) |
+| `power_burn_bcfd` | BCF/d | neutral | Gas-fired power sector consumption — EIA-930 hourly primary, EIA monthly fallback |
+| `mexico_pipeline_exports_bcfd` | BCF/d | neutral | US pipeline exports to Mexico (EIA monthly) |
+| `power_demand_stress_index` | 0–100 | >70 bullish (high burn), <30 bearish | Composite ISO LMP stress index, region=US |
+| `lmp_stress_score` | z-score | >1.5 elevated, <−1.5 slack | Per-ISO LMP z-score vs 30-day trailing mean; region = ISO code (e.g. PJM, ERCOT) |
+| `lng_implied_exports_bcfd` | BCF/d | >12 bullish, <8 bearish | AIS-derived or EIA-fallback LNG export rate |
+| `lng_terminal_utilization_pct` | % | >85 bullish, <60 bearish | AIS: implied exports ÷ nameplate capacity (skipped on EIA fallback) |
+| `lng_export_pressure_index` | 0–100 | ≥70 bullish (strong export pull), <40 bearish | Composite: 65% utilization + 35% queue pressure |
+| `lng_queue_depth` | vessels | >0 = amber; indicates loading backlog | Total anchored ships across all terminals |
+| `lng_destination_eu_pct` | % | High = geopolitically supportive | Share of vessels bound for EU regasification terminals |
+| `fairvalue_mid` | USD/MMBtu | Model fair value midpoint | OLS estimate (or lookup table fallback); interpretation: price vs. mid |
+| `fairvalue_low` | USD/MMBtu | 5th percentile confidence bound | OLS: intercept − 1.645×sigma; lookup: bin floor |
+| `fairvalue_high` | USD/MMBtu | 95th percentile confidence bound | OLS: intercept + 1.645×sigma; lookup: bin ceiling |
+| `fairvalue_gap` | USD/MMBtu | Positive = overvalued (bearish), negative = undervalued (bullish) | Current price minus `fairvalue_mid`; labeled FAIRLY_PRICED if \|gap\| < sigma |
 
-**Interpretation values:** `very_bullish`, `bullish`, `mildly_bullish`, `neutral`, `mildly_bearish`, `bearish`, `very_bearish`, `unknown`
+**Interpretation values:** `very_bullish`, `bullish`, `mildly_bullish`, `neutral`, `fairly_priced`, `mildly_bearish`, `bearish`, `very_bearish`, `unknown`
 
-**Confidence values:** `high` = recent complete data; `medium` = projection with uncertainty; `low` = fewer than 4 years of history
+**Confidence values:** `high` = recent complete data; `medium` = projection with uncertainty; `low` = fewer than 4 years of history or EIA fallback mode
 
 ---
 
@@ -363,18 +378,40 @@ Series order: `dry_gas_production_mmcf`, `lng_exports_mmcf`, `power_sector_burn_
 
 ```json
 {
-  "summary_date": "2026-03-08",
-  "score": 32.5,
-  "label": "Bullish",
-  "drivers": ["Storage 250 Bcf below 5-year avg", "..."],
-  "what_changed": [{"feature": "weather_hdd_revision_delta", "delta": 4.2, "..."}],
+  "summary_date": "2026-03-14",
+  "score": 16.5,
+  "label": "Mildly Bullish",
+  "drivers": ["EOS trajectory 1574 Bcf — below comfortable range"],
+  "what_changed": [
+    {"feature": "storage_eos_projection_bcf", "delta": 264.5, "direction": "up"}
+  ],
   "generated_at": "...",
   "history": [
-    {"date": "2026-03-08", "score": 32.5, "label": "Bullish"},
-    {"date": "2026-03-07", "score": 28.1, "label": "Bullish"}
-  ]
+    {"date": "2026-03-14", "score": 16.5, "label": "Mildly Bullish"},
+    {"date": "2026-03-13", "score": 14.2, "label": "Mildly Bullish"}
+  ],
+  "fair_value": {
+    "mid": 3.15,
+    "low": 2.26,
+    "high": 6.10,
+    "gap": -0.02,
+    "interpretation": "fairly_priced",
+    "confidence": "medium",
+    "history": [
+      {
+        "date": "2026-03-14",
+        "mid": 3.15,
+        "low": 2.26,
+        "high": 6.10,
+        "gap": -0.02,
+        "price": 3.13
+      }
+    ]
+  }
 }
 ```
+
+`fair_value` is `null` (field omitted) until `transforms/features_fairvalue.py` has run at least once. `confidence` is `"medium"` in lookup-table mode and `"high"` after OLS refit. The `history` array covers up to 90 days, joined with actual Henry Hub prices from `facts_time_series`.
 
 ### GET /api/price
 

@@ -200,23 +200,41 @@ All collectors are idempotent — re-running writes no duplicate rows due to `ON
 
 ```bash
 python -c "
-from transforms.features_storage import compute_storage_features
-from transforms.features_price   import compute_price_features
-from transforms.features_weather import compute_weather_features
-from transforms.features_cpc     import compute_cpc_features
-from transforms.features_cot     import compute_cot_features
-from transforms.features_summary import save_summary
-compute_storage_features()
+from transforms.features_price        import compute_price_features
+from transforms.features_storage      import compute_storage_features
+from transforms.features_weather      import compute_weather_features
+from transforms.features_cpc          import compute_cpc_features
+from transforms.features_cot          import compute_cot_features
+from transforms.features_supply       import compute_supply_features
+from transforms.features_power_demand import compute_power_demand_features
+from transforms.features_lng          import compute_lng_features
+from transforms.features_fairvalue    import compute_fairvalue_features
+from transforms.features_analog       import compute_analog_features
+from transforms.features_summary      import save_summary
 compute_price_features()
+compute_storage_features()
 compute_weather_features()
 compute_cpc_features()
 compute_cot_features()
+compute_supply_features()
+compute_power_demand_features()
+compute_lng_features()
+compute_fairvalue_features()
 save_summary()
+compute_analog_features()
 print('done')
 "
 ```
 
 Transforms are idempotent. Re-running overwrites today's feature rows.
+
+To refit the Fair Value OLS model (run quarterly):
+
+```bash
+python -m scripts.refit_fairvalue
+```
+
+Requires at least 52 weekly observations with HDD data. The model switches from lookup-table mode to OLS mode automatically on the next `:40` scheduler run after `transforms/fairvalue_coefficients.json` is written.
 
 ---
 

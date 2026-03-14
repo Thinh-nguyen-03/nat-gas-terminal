@@ -6,7 +6,7 @@ Each feature is described with: what it is, why it matters to a nat gas trader, 
 
 ---
 
-## Implementation Status (last updated 2026-03-08, rev 2)
+## Implementation Status (last updated 2026-03-14, rev 3)
 
 | Feature | Status | Notes |
 |---------|--------|-------|

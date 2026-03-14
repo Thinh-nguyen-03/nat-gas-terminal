@@ -83,41 +83,58 @@ Each file reads from `facts_time_series`, computes derived features, and upserts
 | File | Features computed |
 |---|---|
 | `features_storage.py` | total Bcf, WoW change, deficit vs 5yr avg, YoY, EOS projection, weekly pace |
-| `features_price.py` | current price, daily/weekly/monthly % change, Nov-Jan spread, 12m strip avg |
-| `features_weather.py` | 7-day population-weighted HDD sum, day-over-day forecast revision delta |
+| `features_price.py` | current price, daily/weekly/monthly % change, Nov-Jan spread, 12m strip avg, TTF/HH arb spread |
+| `features_weather.py` | 7-day population-weighted HDD sum, day-over-day forecast revision delta, implied demand vs normal |
 | `features_cpc.py` | population-weighted prob_below for 6-10 and 8-14 day CPC windows; interpretation (bullish → bearish) |
 | `features_cot.py` | MM net contracts, MM net % of OI, WoW change, open interest |
-| `features_summary.py` | composite fundamental score (-100 to +100), what-changed table |
+| `features_supply.py` | dry production, Canada imports, power burn (EIA-930 primary / EIA monthly fallback), Mexico pipeline exports — all in BCF/d |
+| `features_power_demand.py` | per-ISO LMP z-scores (30-day trailing), composite power demand stress index 0–100 |
+| `features_lng.py` | implied LNG export rate BCF/d, terminal utilization %, export pressure index 0–100, queue depth, EU destination % — AIS primary, EIA monthly fallback |
+| `features_fairvalue.py` | fair value mid/low/high ($/MMBtu), price-vs-fair-value gap — lookup table mode by default; switches to OLS after `scripts/refit_fairvalue.py` is run |
+| `features_analog.py` | stores daily feature snapshots; writes top-3 analog matches with 4/8/12-week price outcomes to `summary_outputs` (`analog_finder` type) |
+| `features_summary.py` | composite fundamental score (−100 to +100), what-changed table |
+| `market_brief.py` | Gemini AI synthesis of all signals → outlook paragraph, key drivers, tail risk; writes to `summary_outputs` (`market_brief` type); no-op if `GEMINI_API_KEY` unset |
 
 ### scheduler/jobs.py
 
-APScheduler `BlockingScheduler` with US/Eastern timezone. Runs as a standalone process (`python -m scheduler.jobs`). Jobs are ordered so collectors fire before transforms. Feature transforms are staggered across the hour to avoid concurrent DuckDB writes. The summary job runs at :30 after all features are fresh.
+APScheduler `BlockingScheduler` with US/Eastern timezone. Runs as a standalone process (`python -m scheduler.jobs`). On startup a **gap check** runs all stale collectors in parallel threads before the regular schedule begins. A periodic **watchdog** job fires every 15 minutes to catch any sources that drifted stale between scheduled runs.
 
 **Collector schedule:**
 
 | Job | Schedule | misfire_grace_time |
 |-----|----------|--------------------|
-| `price` | Mon–Fri 9–17h at :00 and :30 | 5 min |
+| `price` | Mon–Fri 7–18h at :00 and :30 | 5 min |
 | `weather` | Every 6h (0, 6, 12, 18 ET) | 10 min |
 | `cpc_outlook` | Daily 7:00am ET | 15 min |
 | `power_burn` | Every hour at :05 | 5 min |
-| `eia_storage` | Thursday 10:45am ET | 15 min |
+| `iso_lmp` | Every hour at :10 | 5 min |
+| `eia_storage` | Thursday 10:45am ET + retry 11:15am | 15 min |
 | `eia_storage_stats` | Thursday 11:00am ET | 15 min |
 | `eia_supply` | Daily 8:00am ET | 15 min |
 | `cftc_cot` | Friday 4:00pm ET | 30 min |
 | `rig_count` | Friday 2:00pm ET | 30 min |
+| `catalyst_calendar` | Daily 6:00am ET | 15 min |
+| `news_wire` | Every 30 min at :02 and :32 | 5 min |
 
-**Transform schedule (every hour, staggered):**
+**Transform schedule:**
 
-| Job | Minute | Depends on |
-|-----|--------|------------|
-| `feat_price` | :10 | price collector |
-| `feat_storage` | :15 | eia_storage |
-| `feat_weather` | :20 | weather |
-| `feat_cpc` | :22 | cpc_outlook |
-| `feat_cot` | :25 | cftc |
-| `summary` | :30 | all features |
-| `news_wire` | :00/:15/:30/:45 | independent; no feature dependency |
+| Job | Schedule | Depends on |
+|-----|----------|------------|
+| `feat_price` | Every hour at :10 | price collector |
+| `feat_power_demand` | Every hour at :12 | iso_lmp |
+| `feat_supply` | Every hour at :15 | eia_supply, power_burn |
+| `feat_storage` | Daily 11:30am ET | eia_storage, eia_storage_stats |
+| `feat_weather` | Every 6h at :20 (0,6,12,18 ET) | weather |
+| `feat_cpc` | Daily 7:30am ET | cpc_outlook |
+| `feat_cot` | Daily 6:00am ET | cftc_cot |
+| `feat_lng` | Every 30 min at :05 and :35 | AIS binary + eia_supply |
+| `summary` | Every hour at :30 | all features |
+| `feat_analog` | Every hour at :35 | summary |
+| `feat_fairvalue` | Every hour at :40 | storage, weather, cot features |
+| `market_brief` | Mon–Fri 7–18h at :45 | all features; no-op without `GEMINI_API_KEY` |
+| `watchdog` | Every 15 min at :07,:22,:37,:52 | — |
+
+**AIS LNG vessel tracking** is handled by the Go `cmd/ais` binary (persistent WebSocket to AISstream.io). No Python job needed — it writes to `ais_vessels` every 5 minutes.
 
 ### api/ (Go)
 
@@ -127,14 +144,18 @@ Read-only HTTP server serving JSON to the Next.js frontend. Opens DuckDB with `a
 
 | Endpoint | Description | History included |
 |----------|-------------|-----------------|
-| `GET /api/score` | Composite score, label, drivers, what-changed | 90 days |
+| `GET /api/score` | Composite score, label, drivers, what-changed, fair value model | 90 days score + 90 days fair value band |
 | `GET /api/storage` | Storage level, 5yr band, WoW change | 104 weeks, with aligned band |
-| `GET /api/price` | OHLCV, forward curve, Henry Hub spot, heating oil spot | 90 days OHLCV, all curve months, 90 days spot |
+| `GET /api/price` | OHLCV, forward curve, Henry Hub spot, heating oil spot, TTF/arb features | 90 days OHLCV, all curve months, 90 days spot |
 | `GET /api/weather` | 7-day HDD summary, city breakdown, CPC 6-10/8-14 day outlook | 90 days weighted HDD/CDD |
 | `GET /api/supply` | Dry gas production, LNG exports, power burn, Mexico pipeline, total imports, total pipeline exports, gas rig count | 12 months per EIA series; 104 weeks rig count |
 | `GET /api/cot` | MM net positioning, OI | 52 weeks |
+| `GET /api/power` | ISO LMP hub prices + z-scores, stress index | 24h intraday stress history |
+| `GET /api/lng` | Implied exports, utilization, EPI, queue depth, EU%, vessel manifest per terminal | 45 days implied export history |
+| `GET /api/lng/vessels` | Full vessel manifest (name, terminal, status, dwell, destination) | Latest snapshot only |
 | `GET /api/news` | AI-scored headlines with sentiment and price implication | Last 48h, top 30 by score |
 | `GET /api/brief` | Gemini-generated market brief: outlook, 3 drivers, tail risk | Latest available |
+| `GET /api/analogs` | Top-3 historical analog periods with feature match details and price outcomes | Latest computed analogs |
 | `GET /api/health` | DB reachability, per-collector last status | — |
 | `GET /api/stream` | SSE event stream | — |
 | `POST /internal/notify` | Python → Go push; triggers SSE fan-out | — |
