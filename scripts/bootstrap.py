@@ -100,22 +100,26 @@ def step_transforms() -> None:
     from transforms.features_lng          import compute_lng_features, backfill_lng_from_eia
     from transforms.features_fairvalue    import compute_fairvalue_features
     from transforms.features_summary      import save_summary
-    from transforms.features_analog       import compute_analog_features
+    from transforms.features_analog       import compute_analog_features, backfill_feature_snapshots
     from transforms.market_brief          import compute_market_brief
 
     transforms = [
-        ("feat_price",        compute_price_features),
-        ("feat_storage",      compute_storage_features),
-        ("feat_weather",      compute_weather_features),
-        ("feat_cpc",          compute_cpc_features),
-        ("feat_cot",          compute_cot_features),
-        ("feat_power_demand", compute_power_demand_features),
-        ("lng_eia_backfill",  backfill_lng_from_eia),
-        ("feat_lng",          compute_lng_features),
-        ("feat_fairvalue",    compute_fairvalue_features),
-        ("summary",           save_summary),
-        ("feat_analog",       compute_analog_features),
-        ("market_brief",      compute_market_brief),
+        ("feat_price",          compute_price_features),
+        ("feat_storage",        compute_storage_features),
+        ("feat_weather",        compute_weather_features),
+        ("feat_cpc",            compute_cpc_features),
+        ("feat_cot",            compute_cot_features),
+        ("feat_power_demand",   compute_power_demand_features),
+        ("lng_eia_backfill",    backfill_lng_from_eia),
+        ("feat_lng",            compute_lng_features),
+        ("feat_fairvalue",      compute_fairvalue_features),
+        ("summary",             save_summary),
+        # Seed feature_snapshots with years of historical vectors from raw data
+        # before running compute_analog_features so the first live run can
+        # immediately find analogs rather than waiting 52+ days.
+        ("snap_backfill",       backfill_feature_snapshots),
+        ("feat_analog",         compute_analog_features),
+        ("market_brief",        compute_market_brief),
     ]
 
     for name, fn in transforms:

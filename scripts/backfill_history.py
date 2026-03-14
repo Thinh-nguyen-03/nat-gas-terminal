@@ -387,12 +387,12 @@ def backfill_noaa_hdd(conn, start_year: int = 2010) -> None:
                         "limit":      1000,
                     },
                     headers={"token": NOAA_CDO_TOKEN},
-                    timeout=30,
+                    timeout=60,
                 )
                 resp.raise_for_status()
-            except requests.HTTPError as exc:
-                logger.warning("  %s %d: HTTP %s — skipping", city, year, exc)
-                time.sleep(0.5)
+            except requests.exceptions.RequestException as exc:
+                logger.warning("  %s %d: request failed — skipping (%s)", city, year, exc)
+                time.sleep(1.0)
                 continue
 
             results = resp.json().get("results", [])
@@ -442,11 +442,95 @@ def backfill_noaa_hdd(conn, start_year: int = 2010) -> None:
     logger.info("NOAA HDD backfill complete: %d daily rows written", total_rows)
 
 
+_EIA_STATS_URL = "https://ir.eia.gov/ngs/ngsstats.xls"
+
+# Column layout mirrors collectors/eia_storage_stats.py exactly.
+_STATS_REGIONS: list[tuple[str, int, int, int]] = [
+    # (region_name, avg_col, max_col, min_col)
+    ("total",         8,  16, 24),
+    ("east",          1,   9, 17),
+    ("midwest",       2,  10, 18),
+    ("mountain",      3,  11, 19),
+    ("pacific",       4,  12, 20),
+    ("south_central", 5,  13, 21),
+]
+
+_STATS_INSERT_SQL = """
+    INSERT INTO facts_time_series
+        (source_name, series_name, region, observation_time,
+         ingest_time, value, unit, frequency)
+    VALUES ('eia_storage_stats', ?, ?, ?, ?, ?, 'Bcf', 'weekly')
+    ON CONFLICT (source_name, series_name, region, observation_time)
+    DO UPDATE SET value = excluded.value, ingest_time = excluded.ingest_time
+"""
+
+
+def backfill_eia_storage_stats(conn, start: str = "2010-01-01") -> None:
+    """Parse every sheet in ngsstats.xls (one sheet per report year) to
+    backfill 5-year avg/max/min storage statistics.
+
+    The live EIAStorageStatsCollector only reads sheet 0 (current year).
+    This function reads all sheets so historical weeks are populated too.
+    """
+    import xlrd
+
+    logger.info("EIA storage stats backfill (all sheets, start=%s)", start)
+    resp = requests.get(_EIA_STATS_URL, timeout=60)
+    resp.raise_for_status()
+    wb = xlrd.open_workbook(file_contents=resp.content)
+
+    now_str = datetime.now(timezone.utc).isoformat()
+    total_rows = 0
+
+    for sheet_idx in range(wb.nsheets):
+        sheet = wb.sheet_by_index(sheet_idx)
+        sheet_rows = 0
+
+        for row_idx in range(3, sheet.nrows):
+            row = sheet.row_values(row_idx)
+            date_serial = row[0]
+            if not date_serial:
+                continue
+            try:
+                obs_date = xlrd.xldate_as_datetime(date_serial, wb.datemode)
+            except Exception:
+                continue
+            obs_str = obs_date.strftime("%Y-%m-%dT00:00:00Z")
+            if obs_str[:10] < start:
+                continue
+
+            for region, avg_col, max_col, min_col in _STATS_REGIONS:
+                ncols = len(row)
+                for series_name, col_idx in [
+                    (f"storage_5yr_avg_{region}", avg_col),
+                    (f"storage_5yr_max_{region}", max_col),
+                    (f"storage_5yr_min_{region}", min_col),
+                ]:
+                    if col_idx >= ncols:
+                        continue
+                    val = row[col_idx]
+                    if val == "" or val is None:
+                        continue
+                    try:
+                        conn.execute(_STATS_INSERT_SQL, [
+                            series_name, region, obs_str, now_str, float(val),
+                        ])
+                        sheet_rows += 1
+                    except Exception as e:
+                        logger.debug("  stats insert skip: %s", e)
+
+        logger.info("  Sheet %d (%s): %d rows written",
+                    sheet_idx, sheet.name, sheet_rows)
+        total_rows += sheet_rows
+
+    logger.info("EIA storage stats backfill complete: %d rows total", total_rows)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--section",
-        choices=["storage", "cot", "prices", "hdd", "all"],
+        choices=["storage", "cot", "prices", "hdd", "stats", "all"],
         default="all",
         help="Which data section to backfill (default: all)",
     )
@@ -479,6 +563,9 @@ def main() -> None:
 
         if args.section in ("hdd", "all"):
             backfill_noaa_hdd(conn, start_year=args.start_year)
+
+        if args.section in ("stats", "all"):
+            backfill_eia_storage_stats(conn, start=args.start)
     finally:
         conn.close()
 

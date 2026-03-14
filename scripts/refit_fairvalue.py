@@ -62,6 +62,7 @@ def _build_training_set(
     """
     cutoff = (datetime.now() - timedelta(days=window_years * 365)).strftime("%Y-%m-%d")
     effective_start = max(start, cutoff)
+    effective_start_date = datetime.strptime(effective_start, "%Y-%m-%d").date()
 
     # --- Storage: weekly ---
     storage_rows = conn.execute("""
@@ -70,7 +71,7 @@ def _build_training_set(
         WHERE source_name = 'eia_storage' AND series_name = 'storage_total'
           AND observation_time::DATE >= ?
         ORDER BY d
-    """, [effective_start]).fetchall()
+    """, [effective_start_date]).fetchall()
 
     # Need full history to compute rolling avg (go back 5 extra years)
     all_storage_rows = conn.execute("""
