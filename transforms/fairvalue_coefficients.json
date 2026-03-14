@@ -1,0 +1,14 @@
+{
+  "version": "1",
+  "fitted_at": "2026-03-14T18:23:52.769497+00:00",
+  "n_obs": 119,
+  "r_squared": 0.3446,
+  "residual_sigma": 1.2673,
+  "intercept": 2.9846525224758254,
+  "coefficients": {
+    "storage_deficit_vs_5yr_bcf": -0.0023424440579563315,
+    "hdd_7d_weighted": 0.00856222085049593,
+    "cot_mm_net_pct_oi": 0.034469253872876894,
+    "season_winter": -0.4349096282320358
+  }
+}
